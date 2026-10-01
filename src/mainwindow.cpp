@@ -117,8 +117,14 @@ MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode
         m_profile = new QWebEngineProfile(this);   // profil hors disque
         m_profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
         m_profile->setHttpCacheMaximumSize(20 * 1024 * 1024);
+        // Politique de permissions persistantes (geolocalisation, camera...) :
+        // API Qt 6.8. En dessous, le profil etant deja hors disque et le
+        // stockage des permissions suivant le profil, cette ligne n'apporte
+        // rien de plus — elle est donc simplement absente.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
         m_profile->setPersistentPermissionsPolicy(
             QWebEngineProfile::PersistentPermissionsPolicy::StoreInMemory);
+#endif
     } else {
         m_profile = new QWebEngineProfile(QStringLiteral("BrowserECO"), this);
         m_profile->setPersistentStoragePath(

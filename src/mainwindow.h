@@ -139,9 +139,8 @@ private:
     int tabCountOfView(const QWebEngineView *view) const;
     bool isWebUrl(const QUrl &url) const;
     void showErrorPage(const QWebEngineView *view, const QString &reason);
-    // Menu contextuel de la page, en francais. Les donnees (lien, image,
-    // selection) viennent de QWebEngineView::lastContextMenuRequest(), donc
-    // aucun script n'est injecte dans la page.
+    // Menu contextuel de la page, en francais. La cible sous le curseur est
+    // demandee a la page par un petit script execute uniquement au clic droit.
     void showPageContextMenu(QWebEngineView *view, const QPoint &globalPos);
     void buildPageContextMenu(QWebEngineView *view, const QPoint &globalPos, const QString &targetJson);
     void handleRenderProcessTerminated(QWebEngineView *view,
