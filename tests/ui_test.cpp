@@ -14,6 +14,8 @@
 #include <QDir>
 #include <QPushButton>
 #include <QToolButton>
+#include <QMenu>
+#include <QContextMenuEvent>
 #include <QLineEdit>
 #include <QTabWidget>
 #include <QTabBar>
@@ -52,6 +54,8 @@ private slots:
     void telechargements_Dialogue();
     void raccourciAnnoncesReels();
     void aPropos_ChiffresCoherents();
+    void menuContextuel_Page();
+    void boutonEco_Fonctionnel();
     void cleanupTestCase();
 
 private:
@@ -87,11 +91,12 @@ bool UiTest::openModal(const char *slot, const QString &shotName, int liveMs)
     return m_modalSeen;
 }
 
-// Dossier de sortie des captures : $BROWSERECO_SHOTS sinon /tmp/opencode/shots
+// Dossier de sortie des captures : $BROWSERECO_SHOTS sinon
+// <dossier temporaire>/BrowserECO-shots (jamais un chemin fige hors projet)
 static QString shotsDir()
 {
-    const QString dir = qEnvironmentVariable("BROWSERECO_SHOTS",
-                                            QStringLiteral("/tmp/opencode/shots"));
+    const QString dir = qEnvironmentVariable(
+        "BROWSERECO_SHOTS", QDir::tempPath() + QStringLiteral("/BrowserECO-shots"));
     QDir().mkpath(dir);
     return dir;
 }
@@ -443,6 +448,67 @@ void UiTest::aPropos_ChiffresCoherents()
     QVERIFY2(!txt.contains(QStringLiteral("DataSaver Browser")),
              "le nom de l'application s'est glisse dans la ligne du moteur");
     QVERIFY2(QString::number(rules).length() > 0, "compteur de regles vide");
+}
+
+/* Le menu contextuel doit exister, etre en francais, et n'inclure QUE des
+   actions qui ont du sens (pas de menu rempli d'entrees grises). */
+void UiTest::menuContextuel_Page()
+{
+    auto *tabs = w->findChild<QTabWidget *>();
+    QVERIFY(tabs);
+    auto *view = qobject_cast<QWebEngineView *>(tabs->currentWidget());
+    QVERIFY(view);
+
+    QStringList actions;
+    int shotCount = 0;
+    QTimer::singleShot(900, this, [&actions, &shotCount]{
+        if (QMenu *m = qobject_cast<QMenu *>(QApplication::activePopupWidget())) {
+            actions = m->actions().isEmpty()
+                    ? QStringList()
+                    : [&]{ QStringList l; for (QAction *a : m->actions()) l << a->text(); return l; }();
+            shotCount = 1;
+            shot(m, "17-menu-contextuel");
+            m->close();
+        }
+    });
+    // Le clic droit est intercepte par MainWindow (eventFilter) puis le menu
+    // est construit apres un hit-test JS : il faut laisser la boucle tourner.
+    const QPoint pos = view->rect().center();
+    QContextMenuEvent ev(QContextMenuEvent::Mouse, pos, view->mapToGlobal(pos));
+    QApplication::sendEvent(view, &ev);
+
+    for (int i = 0; i < 40 && actions.isEmpty(); ++i) QTest::qWait(50);
+    QVERIFY2(!actions.isEmpty(), "aucun menu contextuel au clic droit");
+    const QString joined = actions.join(QStringLiteral(" | "));
+    QVERIFY2(!joined.contains(QStringLiteral("Show in")), "menu en anglais");
+    QVERIFY2(joined.contains(QStringLiteral("Recharger")), "Recharger absent");
+    QVERIFY2(joined.contains(QStringLiteral("Zoom")), "Zoom absent");
+    QVERIFY2(joined.contains(QStringLiteral("code source")), "code source absent");
+    QVERIFY2(joined.contains(QStringLiteral("Inspecter")), "Inspecter absent");
+    Q_UNUSED(shotCount);
+}
+
+/* Le bouton bouclier etait un controle mort (desactive en permanence).
+   Il doit maintenant basculer le mode economie de donnees. */
+void UiTest::boutonEco_Fonctionnel()
+{
+    QToolButton *shield = nullptr;
+    for (QToolButton *b : w->findChildren<QToolButton *>()) {
+        if (b->toolTip().startsWith(QStringLiteral("Économie de données :")))
+            shield = b;
+    }
+    QVERIFY2(shield, "bouton bouclier introuvable");
+    QVERIFY2(shield->isEnabled(), "bouton bouclier desactive");
+    QVERIFY2(shield->isCheckable(), "bouton bouclier non basculant");
+
+    const bool before = shield->isChecked();
+    QTest::mouseClick(shield, Qt::LeftButton);
+    QTest::qWait(200);
+    QVERIFY2(shield->isChecked() != before, "le clic ne bascule pas le mode eco");
+    // Remise dans l'etat initial
+    QTest::mouseClick(shield, Qt::LeftButton);
+    QTest::qWait(200);
+    QCOMPARE(shield->isChecked(), before);
 }
 
 void UiTest::cleanupTestCase()

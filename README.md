@@ -63,6 +63,23 @@ Version **1.2** — robustesse, blocage adverts conforme, build et tests propres
   session privée), `LICENCE` GPL-3.0, attribution des listes de filtres,
   CI GitHub Actions, `.deb` et métadonnées AppStream.
 
+### Ergonomie
+
+- **Menu contextuel au clic droit** : il n'y en avait aucun. Ouverture d'un
+  lien ou d'une image dans un onglet (avant ou de fond), copie du lien / de
+  l'image / de la sélection, recherche de la sélection avec le moteur courant,
+  recharger ou arrêter, zoom, code source, inspecteur, réglages Data saver.
+  Les entrées n'apparaissent que si elles ont du sens (pas de menu à moitié
+  gris), le tout en français — le menu par défaut de Qt est en anglais et
+  QWebEngineView ne le remplace pas de façon fiable.
+- **Bouton bouclier enfin utile** : il était `setEnabled(false)` depuis sa
+  création, donc un contrôle mort dans la barre d'outils et dans le parcours
+  de tabulation. Il bascule maintenant le mode économie de données, avec une
+  icône qui reflète l'état.
+- Infobulles corrigées : elles annonçaient « Alt+clic = nouvel onglet », ce que
+  le code ne fait pas (`BrowserPage::createWindow` renvoie volontairement
+  l'onglet courant).
+
 ## Résumé des changements
 
 ### 1. Moteur de recherche : plus précis, toujours léger
@@ -236,6 +253,21 @@ manuel des `.o`. Chaque test a un **timeout** (120 s pour les tests purs, 300 s
 pour ceux qui démarrent QtWebEngine) et s'exécute dans son propre dossier vide,
 recréé à chaque exécution — aucun test ne peut voir un `settings.txt`, une base
 ou un profil réel, ni les réglages laissés par un autre test.
+
+**11 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
+
+| Suite | Couverture |
+|---|---|
+| `test_adblock` | sémantique ABP (règles `-`, `##`, `$domain=`, `@@`, ancres), absence de bypass par query string, **performance** (µs par requête sur les vraies listes) |
+| `test_searchengine` | résolution URL/recherche, bangs, repli, moteurs JS écartés, refus des URL `javascript:` |
+| `test_settings` | ancien format (5 lignes) → `clé=valeur`, bornes, fichiers corrompus |
+| `test_history` | jokers `LIKE` échappés, suppression, effacement |
+| `test_homepage` | aucun placeholder résiduel, CSS intact |
+| `test_icons` | chaque icône dessine bien des pixels |
+| `test_eco_stats` | cohérence et bornage des compteurs d'économie |
+| `serp_test` | repli anti-challenge, détection de mur, exemption d'images sur les pages de vérification |
+| `freeze_test` | anti-gel : Menu → Téléchargements, thread témoin |
+| `ui_test` | **21 tests d'interface** : barre d'adresse, suggestions, panneau Eco, historique, raccourcis, onglets, zoom, raccourcis annoncés = réels, menu contextuel, bouton Eco |
 
 ---
 

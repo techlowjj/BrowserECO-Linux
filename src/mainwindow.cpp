@@ -28,6 +28,9 @@
 #include <QWebEngineProfile>
 #include <QWebEngineHistory>
 #include <QWebEngineNewWindowRequest>
+#include <QRegularExpression>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QShortcut>
 #include <QVector>
 #include <QListWidget>
@@ -394,9 +397,15 @@ void MainWindow::setupUi() {
     m_ecoBtn->setText(tr("Eco"));
     m_ecoBtn->setToolTip(tr("Panneau Data saver  (Ctrl+E)"));
 
-    m_privacyBtn = mkNav(Icons::shield(), tr("Aucune donnée envoyée à un serveur"));
-    m_privacyBtn->setEnabled(false);
-    m_privacyBtn->setToolTip(tr("Search & privacy : aucun traçage, Save-Data, bloqueurs\nAlt+clic sur un lien = ouvrir dans un nouvel onglet"));
+    // Bouton bouclier : c'etait un controle mort (desactive en permanence, donc
+    // inutile et sans effet pour un lecteur d'ecran). Il devient le vrai
+    // interrupteur du mode economie de donnees, avec un etat visible.
+    m_privacyBtn = mkNav(Icons::shield(), tr("Économie de données"));
+    m_privacyBtn->setCheckable(true);
+    m_privacyBtn->setAccessibleName(tr("Économie de données"));
+    m_privacyBtn->setToolTip(tr("Économie de données : Save-Data + bloqueurs (Ctrl+E)\n"
+                                "Cliquer pour activer ou désactiver\n"
+                                "Clic droit sur un lien = nouvel onglet, copie, code source…"));
 
     m_menuBtn = new QToolButton(m_toolBar);
     m_menuBtn->setObjectName(QStringLiteral("menuBtn"));
@@ -523,6 +532,9 @@ void MainWindow::setupConnections() {
     connect(m_omni, &OmniBox::urlSubmitted, this, &MainWindow::onUrlEntered);
     connect(m_omni, &OmniBox::engineMenuRequested, this,
             [this](const QPoint &p) { showEngineMenuAt(p); });
+    connect(m_privacyBtn, &QToolButton::clicked, this, [this](bool on){
+        toggleDataSaver(on);
+    });
     connect(m_ecoBtn, &QToolButton::clicked, this, [this]{
         if (m_ecoPanel && m_ecoPanel->isVisible()) { m_ecoPanel->hide(); return; }
         showEcoPanelAt(m_ecoBtn->mapToGlobal(QPoint(0, m_ecoBtn->height() + 6)));
@@ -609,6 +621,8 @@ QWebEngineView* MainWindow::createNewTabView() {
     view->setZoomFactor(m_zoom);
     view->setFocusPolicy(Qt::StrongFocus);
     view->installEventFilter(this); // Ctrl+molette = zoom
+    // Clic droit : sans ce menu, il n'y avait aucun moyen de copier un lien,
+    // ouvrir dans un onglet, voir la source ou inspecter.
 
     EcoTab *info = new EcoTab();
     info->view = view;
@@ -734,6 +748,13 @@ void MainWindow::navigateCurrent(const QUrl &url) {
 
 // Ctrl+molette = zoom de la page (filtre installe sur chaque vue)
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    // Clic droit : on affiche NOTRE menu et on consomme l'evenement, sinon Qt
+    // affiche son menu par defaut (en anglais, et il n'a pas d'entree eco).
+    if (event->type() == QEvent::ContextMenu) {
+        auto *me = qobject_cast<QWebEngineView *>(obj);
+        auto *ce = static_cast<QContextMenuEvent *>(event);
+        if (me) { showPageContextMenu(me, ce->globalPos()); return true; }
+    }
     if (event->type() == QEvent::Wheel) {
         auto *we = qobject_cast<QWebEngineView *>(obj);
         if (we) {
@@ -1019,6 +1040,8 @@ void MainWindow::syncEcoWidgets()
         m_ecoPanel->setQualityValue(m_quality);
         m_ecoPanel->refresh();
     }
+    m_privacyBtn->setChecked(m_dataSaver || m_ultraEco);
+    m_privacyBtn->setIcon(m_dataSaver || m_ultraEco ? Icons::shield() : Icons::eyeOff());
     m_ecoBtn->setObjectName(m_dataSaver || m_ultraEco ? QStringLiteral("ecoBtn") : QStringLiteral("ecoBtnOff"));
     m_ecoBtn->style()->unpolish(m_ecoBtn);
     m_ecoBtn->style()->polish(m_ecoBtn);
@@ -1144,6 +1167,152 @@ void MainWindow::showEngineMenuAt(const QPoint &globalPos)
     connect(eco, &QAction::triggered, this, [this]{
         showEcoPanelAt(m_ecoBtn->mapToGlobal(QPoint(0, m_ecoBtn->height() + 6)));
     });
+    menu.exec(globalPos);
+}
+
+/* Menu contextuel de la page, en francais et sans les entrees inutiles.
+   La cible du clic droit (lien, image) est demandee a la page par un script
+   de quelques centaines d'octets, execute uniquement au clic droit ; la
+   selection vient de la vue. Le menu est construit ici, seule source des
+   actions. */
+/* Clic droit : on demande a la page ce qui se trouve SOUS le curseur (lien ou
+   image), puis le menu est construit. Un seul aller-retour JS de quelques
+   centaines d'octets, execute au clic droit uniquement ; le menu reste donc
+   francophone et n'affiche que des actions possibles. Le menu de Qt n'est pas
+   utilise : il est en anglais et QWebEngineView ne le remplace pas toujours. */
+void MainWindow::showPageContextMenu(QWebEngineView *view, const QPoint &globalPos)
+{
+    if (!view || !view->page()) return;
+    QPointer<QWebEngineView> target(view);
+    const QPoint local = view->mapFromGlobal(globalPos);
+    const QString js = QStringLiteral(R"JS((function(){
+  var e = document.elementFromPoint(%1, %2);
+  var out = { link: '', image: '' };
+  while (e && e !== document.documentElement && e !== document.body) {
+    if (e.tagName === 'A' && e.href) { out.link = e.href; break; }
+    if ((e.tagName === 'IMG' || e.tagName === 'VIDEO') && e.src) { out.image = e.src; break; }
+    e = e.parentElement;
+  }
+  return JSON.stringify(out);
+})())JS")
+        .arg(QString::number(local.x()), QString::number(local.y()));
+    view->page()->runJavaScript(js, [this, target, globalPos](const QVariant &v) {
+        if (target.isNull()) return;
+        buildPageContextMenu(target, globalPos, v.toString());
+    });
+}
+
+void MainWindow::buildPageContextMenu(QWebEngineView *view, const QPoint &globalPos,
+                                      const QString &targetJson)
+{
+    if (!view || !view->page()) return;
+    QMenu menu(this);
+    menu.setStyleSheet(styleSheet());
+
+    const QJsonObject target = QJsonDocument::fromJson(targetJson.toUtf8()).object();
+    const QUrl linkUrl(target.value(QStringLiteral("link")).toString());
+    const QUrl imageUrl(target.value(QStringLiteral("image")).toString());
+    const QString selection = view->selectedText().trimmed();
+
+    if (!linkUrl.isEmpty()) {
+        if (isWebUrl(linkUrl)) {
+            QAction *a = menu.addAction(tr("Ouvrir le lien dans un nouvel onglet"));
+            a->setIcon(Icons::plus());
+            connect(a, &QAction::triggered, this, [this, linkUrl]{ newTab(linkUrl); });
+            a = menu.addAction(tr("Ouvrir le lien dans un onglet de fond"));
+            a->setIcon(Icons::plus());
+            connect(a, &QAction::triggered, this, [this, linkUrl]{
+                createNewTabView()->load(linkUrl);   // sans passer en avant
+            });
+            a = menu.addAction(tr("Copier l'adresse du lien"));
+            a->setIcon(Icons::list());
+            connect(a, &QAction::triggered, this, [linkUrl]{
+                QApplication::clipboard()->setText(linkUrl.toDisplayString());
+            });
+        } else {
+            // mailto:, tel:, magnet: : le navigateur ne sait pas les ouvrir.
+            QAction *a = menu.addAction(
+                tr("Ouvrir %1: avec l'application système").arg(linkUrl.scheme()));
+            a->setIcon(Icons::external());
+            connect(a, &QAction::triggered, this, [this, linkUrl]{
+                if (!QDesktopServices::openUrl(linkUrl))
+                    setStatus(tr("Aucune application ne peut ouvrir un lien %1").arg(linkUrl.scheme()), 4000);
+            });
+        }
+        menu.addSeparator();
+    }
+
+    if (!imageUrl.isEmpty() && isWebUrl(imageUrl)) {
+        QAction *a = menu.addAction(tr("Ouvrir l'image dans un nouvel onglet"));
+        a->setIcon(Icons::external());
+        connect(a, &QAction::triggered, this, [this, imageUrl]{ newTab(imageUrl); });
+        a = menu.addAction(tr("Copier l'adresse de l'image"));
+        connect(a, &QAction::triggered, this, [imageUrl]{
+            QApplication::clipboard()->setText(imageUrl.toDisplayString());
+        });
+        menu.addSeparator();
+    }
+
+    if (!selection.isEmpty()) {
+        QAction *a = menu.addAction(tr("Copier la sélection"));
+        a->setIcon(Icons::list());
+        const QString sel = selection;
+        connect(a, &QAction::triggered, this, [sel]{
+            QApplication::clipboard()->setText(sel);
+        });
+        a = menu.addAction(tr("Rechercher « %1 »").arg(sel.left(40) + (sel.size() > 40 ? QStringLiteral("…") : QString())));
+        a->setIcon(Icons::search());
+        connect(a, &QAction::triggered, this, [this, sel]{
+            onUrlEntered(m_search->buildUrl(*m_search->current(), sel));
+        });
+        menu.addSeparator();
+    }
+
+    auto *page = view->page();
+    if (page->isLoading()) {
+        QAction *a = menu.addAction(tr("Arrêter le chargement"));
+        a->setIcon(Icons::stop());
+        connect(a, &QAction::triggered, this, [this]{ if (auto v = currentView()) v->stop(); });
+    } else {
+        QAction *a = menu.addAction(tr("Recharger"));
+        a->setIcon(Icons::reload());
+        connect(a, &QAction::triggered, this, [this]{ if (auto v = currentView()) v->reload(); });
+    }
+    if (isWebUrl(page->url())) {
+        QAction *a = menu.addAction(tr("Copier l'adresse de la page"));
+        connect(a, &QAction::triggered, this, [page]{
+            QApplication::clipboard()->setText(page->url().toDisplayString());
+        });
+    }
+    menu.addSeparator();
+
+    QAction *a = menu.addAction(tr("Zoom arrière"));
+    connect(a, &QAction::triggered, this, [this]{ setZoom(m_zoom - 0.1); });
+    a = menu.addAction(tr("Zoom 100 %"));
+    connect(a, &QAction::triggered, this, [this]{ setZoom(1.0); });
+    a = menu.addAction(tr("Zoom avant"));
+    connect(a, &QAction::triggered, this, [this]{ setZoom(m_zoom + 0.1); });
+    menu.addSeparator();
+
+    a = menu.addAction(tr("Afficher le code source"));
+    a->setIcon(Icons::list());
+    connect(a, &QAction::triggered, this, [this]{
+        if (auto v = currentView()) newTab(QUrl(QStringLiteral("view-source:") + v->url().toString()));
+    });
+    a = menu.addAction(tr("Inspecter la page"));
+    a->setIcon(Icons::gear());
+    connect(a, &QAction::triggered, this, [this]{
+        if (auto v = currentView())
+            v->page()->triggerAction(QWebEnginePage::WebAction::InspectElement);
+    });
+    a = menu.addAction(tr("Réglages Data saver…"));
+    a->setIcon(Icons::leaf());
+    connect(a, &QAction::triggered, this, [this]{
+        showEcoPanelAt(m_ecoBtn->mapToGlobal(QPoint(0, m_ecoBtn->height() + 6)));
+    });
+
+    // Les actions sont connectees a la construction : QMenu::exec() rend la main
+    // apres le declic, donc aucune boite modale n'est ouverte ici.
     menu.exec(globalPos);
 }
 
@@ -1448,7 +1617,7 @@ void MainWindow::showShortcuts() {
         tr("• Tapez l'URL directement : exemple.fr, 192.168.1.1, localhost:8080\n"
            "• Bangs : !w linux, !so lambda, !gh qt6, !mdn array, !yt concert\n"
            "• Préfixes courts : so lambda, gh qt6, w linux\n"
-           "• Alt+clic sur un lien = ouvrir dans un nouvel onglet"), &dlg);
+           "• Clic droit sur un lien = ouvrir dans un nouvel onglet, copier l'adresse"), &dlg);
     tips->setStyleSheet(QStringLiteral("color:#8C90AE;"));
     tips->setWordWrap(true);
     lay->addWidget(tips);
