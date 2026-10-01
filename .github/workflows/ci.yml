@@ -14,6 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-24.04, ubuntu-22.04 ]
+        include:
+          # -Werror seulement sur la toolchain la plus recente : les avertissements
+          #varies selon le GCC, on ne veut pas un depot rouge pour une difference
+          # de version du compilateur.
+          strict: [ true, false ]
 
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +26,8 @@ jobs:
       - name: Installer les dépendances
         run: |
           sudo apt-get update
+          # Qt 6.2 (22.04) a 6.4.2 (24.04) : le projet se construit sur les
+          # deux, avec un garde #if QT_VERSION pour les rares API plus recentes.
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ qt6-base-dev qt6-webengine-dev \
             desktop-file-utils
@@ -30,7 +37,7 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBROWSERECO_BUILD_TESTS=ON \
-            -DBROWSERECO_WERROR=ON
+            -DBROWSERECO_WERROR=${{ matrix.strict && 'ON' || 'OFF' }}
 
       - name: Compiler
         run: cmake --build build --parallel

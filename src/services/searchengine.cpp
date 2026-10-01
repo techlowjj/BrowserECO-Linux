@@ -145,6 +145,10 @@ QString SearchEngineManager::engineForHost(const QUrl &url)
     return QString();
 }
 
+// Delai maximal d'une requete de suggestions (le meme en Qt >= 6.8 natif et
+// en dessous via QTimer : le comportement ne doit pas dependre de la version).
+static constexpr int kSuggestionsTimeoutMs = 8000;
+
 SearchEngineManager::SearchEngineManager(QObject *parent)
     : QObject(parent)
     , m_engineId(defaultEngineId())
@@ -468,14 +472,25 @@ void SearchEngineManager::onDebounce()
     req.setRawHeader("User-Agent", QByteArrayLiteral("DataSaverBrowser/1.1"));
     req.setRawHeader("Save-Data", "on");
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    // Sans delai maximal, un endpoint qui ne repond pas laisse m_reply occupe
-    // indefiniment et chaque frappe> 170 ms relance une requete.
-    req.setTransferTimeout(8000);
     m_reply = m_nam.get(req);
     // IMPORTANT : on capture le pointeur du reply dans le slot.
     // Si on lisait m_reply depuis le slot, un abort() entre-temps aurait
     // mis le membre a null et on appelerait des methodes sur nullptr.
     QNetworkReply *reply = m_reply;
+    // Delai maximal : sans lui, un endpoint qui ne repond pas laisse m_reply
+    // occupe indefiniment et chaque frappe au-dela de 170 ms relance une
+    // requete. Qt 6.8 le fait nativement ; en dessous, on arme un minuteur
+    // qui annule le reply au bout du meme delai (meme comportement).
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    req.setTransferTimeout(kSuggestionsTimeoutMs);
+#else
+    // Qt < 6.8 : minuteur equivalent. abort() declenche finished(), donc la
+    // reponse est liberee par le slot comme une annulation normale.
+    QTimer::singleShot(kSuggestionsTimeoutMs, this, [this, reply]{
+        if (reply == m_reply && reply->isRunning()) reply->abort();
+    });
+#endif
+
     // Le texte et le jeton sont captures AU MOMENT DE LA REQUETE : les relire
     // depuis le membre au retour faisait passer les resultats de la requete N
     // pour ceux de la requete N+1 (frappe rapide).

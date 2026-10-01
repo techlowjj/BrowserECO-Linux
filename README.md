@@ -233,6 +233,12 @@ Elles n'étaient pas visibles avant les tests :
 sudo apt install qt6-base-dev qt6-webengine-dev cmake g++
 ```
 
+**Qt 6.2 minimum** (validé par la CI sur Qt 6.2.4 / Ubuntu 22.04 et 6.4.2 /
+Ubuntu 24.04 ; testé en développement sur Qt 6.8). Les rares API plus récentes
+— le délai maximal d'une requête réseau, disponible depuis Qt 6.8 — sont
+protégées par `#if QT_VERSION`, pas par une exigence de version qui ferait
+échouer la configuration sur une distribution ancienne.
+
 ### Build
 
 ```bash

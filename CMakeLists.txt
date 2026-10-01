@@ -21,7 +21,11 @@ option(BROWSERECO_WERROR "Traiter les avertissements du compilateur comme des er
 # Installation portable : tout dans le prefix (dossier ext4), jamais dans /usr
 # ni sur une partition NTFS. CMAKE_INSTALL_PREFIX reste libre.
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets WebEngineWidgets Sql Network Gui)
+# Qt 6.2 est la version des runners Ubuntu 22.04 (6.4.2 sur 24.04) : c'est le
+# plancher reel du code. Les rares API plus recentes (setTransferTimeout,
+# Qt 6.8) sont protegees par #if QT_VERSION, pas par une exigence de version
+# qui ferait echouer la configuration sur une distribution ancienne.
+find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets WebEngineWidgets Sql Network Gui)
 if(BROWSERECO_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)
 endif()
