@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.browsereco</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>DataSaver Browser</name>
+  <summary>Navigateur économe en données et respectueux de la vie privée</summary>
+
+  <description>
+    <p>
+      DataSaver Browser (BrowserECO) est un navigateur Qt6 portable pour Linux
+      conçu pour économiser la bande passante et les données mobiles.
+    </p>
+    <ul>
+      <li>Blocage des publicités et des traqueurs (EasyList / EasyPrivacy, plus de 110 000 règles)</li>
+      <li>En-tête Save-Data: on envoyé à chaque requête</li>
+      <li>Images, polices, médias et préchargements désactivables</li>
+      <li>Mode Ultra : blocage du streaming vidéo et des favicons</li>
+      <li>Moteur de recherche léger sans JavaScript, avec repli automatique si un moteur affiche un mur anti-bot</li>
+      <li>Mode privé : profil hors disque, rien n'est écrit</li>
+      <li>Aucun télémétrage, aucun serveur de recherche interne</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">BrowserECO.desktop</launchable>
+
+  <provides>
+    <binary>BrowserECO</binary>
+  </provides>
+
+  <categories>
+    <category>Network</category>
+    <category>WebBrowser</category>
+  </categories>
+
+  <keywords>
+    <keyword>browser</keyword>
+    <keyword>privacy</keyword>
+    <keyword>data saver</keyword>
+    <keyword>adblock</keyword>
+    <keyword>eco</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="1.2.0" date="2026-10-01">
+      <description>
+        <p>
+          Robustesse (plantages, onglets, téléchargements, mode privé),
+          blocage adverts conforme a la syntaxe Adblock Plus et 200x plus rapide,
+          construction et tests integres a CMake/CTest avec timeouts,
+          CI GitHub Actions, paquet .deb, licence GPL-3.0 et attribution des
+          listes de filtres.
+        </p>
+      </description>
+    </release>
+    <release version="1.1.0" date="2026-09-29">
+      <description>
+        <p>
+          Moteur de recherche réécrit (9 moteurs, repli anti-bot, bangs),
+          panneau Data saver, barre d'adresse avec suggestions et suggestions
+          locales, correctifs de robustesse et blocage adverts conforme à la
+          syntaxe Adblock Plus.
+        </p>
+      </description>
+    </release>
+  </releases>
+</component>

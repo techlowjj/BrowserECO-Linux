@@ -1,0 +1,37 @@
+# Genere par CMake (configure_file). Ecrit l'entree de menu en utilisant le
+# prefixe REELLEMENT choisi a l'installation (« --prefix X »), et non celui
+# fige a la configuration.
+#
+# Invoque par CMakeLists.txt : cmake -DPREFIX=<prefixe> -P install_desktop.cmake
+#
+# Les jetons sont en %%...%% (et non @...@) : un configure_file en mode @ONLY
+# remplacerait les seconds par les valeurs de configuration, qui sont justement
+# celles qu'il ne faut pas utiliser ici.
+
+if(NOT DEFINED PREFIX OR NOT DEFINED DATADIR OR NOT DEFINED BINDIR)
+    message(FATAL_ERROR "usage: cmake -DPREFIX=... -DDATADIR=... -DBINDIR=... -P install_desktop.cmake")
+endif()
+
+# Ni include(GNUInstallDirs) ni CMAKE_INSTALL_DATADIR ici : sous CPack, le
+# prefixe est un dossier de staging et certaines distributions definissent un
+# DATADIR absolu (/usr/share) qui sortirait du paquet.
+set(CMAKE_INSTALL_PREFIX "${PREFIX}")
+set(_datadir "${DATADIR}")
+
+file(READ "@BROWSERECO_DESKTOP_TEMPLATE@" _txt)
+string(REPLACE "%%EXEC%%" "${CMAKE_INSTALL_PREFIX}/${BINDIR}/BrowserECO" _txt "${_txt}")
+string(REPLACE "%%ICON%%" "${CMAKE_INSTALL_PREFIX}/${_datadir}/icons/hicolor/512x512/apps/browser-eco.png" _txt "${_txt}")
+
+set(_entry "${CMAKE_INSTALL_PREFIX}/${_datadir}/applications")
+
+# Sous CPack, CMAKE_INSTALL_PREFIX vaut « / » (le staging est resolu par les
+# regles install()) : l'ecriture ici echoue. Ce n'est pas une erreur : la copie
+# installee par install(FILES) est deja correcte pour le paquet.
+execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${_entry}"
+                RESULT_VARIABLE _rc OUTPUT_QUIET ERROR_QUIET)
+if(NOT _rc EQUAL 0)
+    message(STATUS "Entree de menu non regeneree (prefixe non inscriptible) : copie de configuration conservee")
+    return()
+endif()
+file(WRITE "${_entry}/BrowserECO.desktop" "${_txt}")
+message(STATUS "Desktop entry : ${_entry}/BrowserECO.desktop")

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="windowTitle">
+   <string>DataSaver Browser</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

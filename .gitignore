@@ -1,0 +1,55 @@
+# ---- Build -----------------------------------------------------------------
+build/
+build-*/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.so.*
+*.user
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+install_manifest.txt
+CPackConfig.cmake
+_cpack_staging/
+
+# ---- Binaires ---------------------------------------------------------------
+/BrowserECO
+/browser-eco
+*.AppImage
+
+# ---- Donnees de profil et d'execution (JAMAIS dans un depot) ---------------
+# Profil QtWebEngine : cookies, historique, localStorage, jetons de confiance.
+WebEngineProfile/
+/settings.txt
+cache.db
+cache.db-wal
+cache.db-shm
+history.db
+history.db-wal
+history.db-shm
+*.db
+*.db-wal
+*.db-shm
+.writetest_*
+/shots/
+
+# ---- Sauvegardes et exports -------------------------------------------------
+BACKUP-*/
+bolt-export/
+*.tar.gz
+*.zip
+
+# ---- Listes de filtres (telechargees, ~3,5 Mo) -----------------------------
+# Elles sont volumineuses et se regenerent : voir Filters/README.md
+/Filters/*.txt
+
+# ---- Divers ----------------------------------------------------------------
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

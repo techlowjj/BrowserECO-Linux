@@ -1,0 +1,67 @@
+name: Build et tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Ubuntu ${{ matrix.os }} — Qt6
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-24.04, ubuntu-22.04 ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer les dépendances
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ qt6-base-dev qt6-webengine-dev \
+            desktop-file-utils
+
+      - name: Configurer
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBROWSERECO_BUILD_TESTS=ON \
+            -DBROWSERECO_WERROR=ON
+
+      - name: Compiler
+        run: cmake --build build --parallel
+
+      - name: Tests (headless)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Valider le fichier .desktop
+        run: |
+          desktop-file-validate build/BrowserECO.desktop
+          # StartupWMClass et WM_CLASS doivent concorder
+          test "$(grep -oP 'StartupWMClass=\K.*' build/BrowserECO.desktop)" = "BrowserECO"
+
+      - name: Tester le lancement (--version / --help)
+        run: |
+          QT_QPA_PLATFORM=offscreen ./build/BrowserECO --version
+          QT_QPA_PLATFORM=offscreen ./build/BrowserECO --help
+
+      - name: Paquet DEB (une seule fois)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          sudo apt-get install -y --no-install-recommends fakeroot
+          # Layout .deb : binaire dans bin/, au lieu de la racine du prefixe
+          cmake -S . -B build-deb -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/usr \
+                -DBROWSERECO_BUILD_TESTS=OFF -DBROWSERECO_DEB_LAYOUT=ON
+          cmake --build build-deb --parallel
+          cpack --config build-deb/CPackConfig.cmake -G DEB
+          dpkg-deb -c browser-eco_*.deb | grep -q "usr/bin/BrowserECO"
+          dpkg-deb --fsys-tarfile browser-eco_*.deb | tar -xO ./usr/share/applications/BrowserECO.desktop \
+            | grep -q '^Exec=/usr/bin/BrowserECO'
+          echo "Paquet .deb OK : $(ls browser-eco_*.deb)"

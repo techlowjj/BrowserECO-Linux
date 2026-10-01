@@ -1,0 +1,50 @@
+# DataSaver Browser — réglages
+#
+# Copiez ce fichier en « settings.txt » à côté du binaire (ou dans le dossier
+# indiqué par --data-dir) et adaptez les valeurs.
+#
+# Format : clé=valeur, un réglage par ligne, « # » pour commenter.
+# L'ancien format Windows (5 lignes, qualité seule en 2e ligne) est encore lu.
+# Les clés inconnues et les valeurs hors bornes sont ignorées (jamais de crash).
+
+# En-tête Save-Data: on + bloqueurs (recommandé en connexion mobile)
+dataSaver=1
+
+# Ne charge aucune image (le réglage le plus rentable : ~60 Ko par image)
+imagesOff=1
+
+# Ultra : bloque en plus streaming, médias, favicons, polices et préchargement
+ultraEco=0
+
+# Favicons des sites (1 Ko par site, ignoré en mode Ultra)
+favicons=1
+
+# Qualité de compression des images, 0-85 (0 = pas de compression)
+quality=65
+
+# Zoom de l'interface et des pages, 0.25-3.0
+zoom=1.00
+
+# Moteur de recherche : ddg | searx | mojeek | wiby | marginalia
+#                     startpage | yep | brave | google
+# (Alt+1 à Alt+9 change de moteur sans quitter l'application)
+engine=ddg
+
+# Instance SearXNG (auto-hébergée = meilleure précision, aucun traçage)
+searxUrl=https://searx.be/search
+
+# Endpoint de suggestions, format JSON type DuckDuckGo « ac » (~100 octets
+# par frappe). Laisser vide pour n'utiliser que l'historique local (0 octet).
+providerUrl=https://duckduckgo.com/ac/
+
+# Basculer automatiquement de moteur quand un mur anti-bot est détecté
+autoFallback=1
+
+# Suggestions issues du réseau (désactiver = 100 % local)
+remoteSuggest=1
+
+# Restaurer les onglets de la session précédente au démarrage
+restoreSession=0
+
+# La session est écrite automatiquement à la sortie (clé « session »,
+# URLs séparées par « | ») : ne pas l'écrire à la main ici.
