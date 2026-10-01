@@ -57,6 +57,8 @@ set(CORE_SOURCES
     src/services/searchengine.h
     src/services/serpguard.cpp
     src/services/serpguard.h
+    src/services/settingsstore.cpp
+    src/services/settingsstore.h
     src/ui/omnibox.cpp
     src/ui/omnibox.h
     src/ui/ecopanel.cpp

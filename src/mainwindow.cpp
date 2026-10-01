@@ -2,6 +2,7 @@
 #include "ui/omnibox.h"
 #include "ui/ecopanel.h"
 #include "ui/icons.h"
+#include "services/settingsstore.h"
 
 #include <QApplication>
 #include <QStandardPaths>
@@ -74,6 +75,9 @@ QString tabTitleFor(const QUrl &url, const QString &pageTitle)
 }
 
 const char *kAppName = "DataSaver Browser";
+
+// Nombre maximum d'onglets dont l'URL est memorisee dans la session.
+constexpr int kMaxSessionTabs = 12;
 
 } // namespace
 
@@ -1981,69 +1985,38 @@ QString MainWindow::homePageHtml() const {
 // Réglages
 // ---------------------------------------------------------------------------
 void MainWindow::loadSettings() {
-    // Defaults prudents (data mobile)
-    m_dataSaver = true;
-    m_imagesOff = true;
-    m_ultraEco = false;
-    m_favicons = true;
-    int quality = 65;
-    double zoom = 1.0;
+    // Lecture : toute la logique de format est dans SettingsStore, partagee
+    // avec les tests (avant, le testSettings recopiait cette fonction et
+    // passait meme si elle etait cassee).
+    const SettingsData d = SettingsStore::load(m_settingsPath);
 
-    QFile f(m_settingsPath);
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&f);
-        QStringList lines;
-        while (!in.atEnd()) lines << in.readLine().trimmed();
-        bool qualitySeen = false;
-        for (const QString &line : lines) {
-            if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
-            const int eq = line.indexOf(QLatin1Char('='));
-            QString key = eq < 0 ? QString() : line.left(eq).trimmed();
-            QString val = eq < 0 ? QString() : line.mid(eq + 1).trimmed();
-            bool ok = false;
+    m_dataSaver = d.dataSaver;
+    m_imagesOff = d.imagesOff;
+    m_ultraEco = d.ultraEco;
+    m_favicons = d.favicons;
+    m_restoreSession = d.restoreSession;
+    m_session = d.session;
 
-            if (eq < 0) {
-                // Ancien format : 2e ligne = qualité seule
-                const int n = line.toInt(&ok);
-                if (ok && !qualitySeen) { quality = qBound(0, n, 85); qualitySeen = true; }
-                continue;
-            }
-            if (key == QLatin1String("dataSaver"))        m_dataSaver = val.toInt() != 0;
-            else if (key == QLatin1String("imagesOff"))   m_imagesOff = val.toInt() != 0;
-            else if (key == QLatin1String("ultraEco"))    m_ultraEco = val.toInt() != 0;
-            else if (key == QLatin1String("favicons"))    m_favicons = val.toInt() != 0;
-            else if (key == QLatin1String("quality")) {
-                const int n = val.toInt(&ok);
-                if (ok) { quality = qBound(0, n, 85); qualitySeen = true; }
-            } else if (key == QLatin1String("zoom")) {
-                const double z = val.toDouble(&ok);
-                if (ok) zoom = qBound(0.25, z, 3.0);
-            }
-            else if (key == QLatin1String("engine"))      m_search->setEngineId(val);
-            else if (key == QLatin1String("searxUrl"))    m_search->setSearxUrl(val);
-            else if (key == QLatin1String("providerUrl")) m_search->setProviderUrl(val);
-            else if (key == QLatin1String("autoFallback")) m_search->setAutoFallback(val.toInt() != 0);
-            else if (key == QLatin1String("remoteSuggest"))m_search->setRemoteSuggestions(val.toInt() != 0);
-            else if (key == QLatin1String("restoreSession")) m_restoreSession = val.toInt() != 0;
-            else if (key == QLatin1String("imageAllow")) {
-                // Sites ou les images sont autorisees malgre « Images OFF ».
-                const QStringList hosts = val.split(QLatin1Char('|'), Qt::SkipEmptyParts);
-                for (const QString &h : hosts)
-                    if (!h.contains(QLatin1Char('/')) && h.contains(QLatin1Char('.')))
-                        m_interceptor->setImageHostAllowed(h.trimmed(), true);
-            }
-            else if (key == QLatin1String("session"))     m_session = val.split(QLatin1Char('|'), Qt::SkipEmptyParts);
-        }
-    }
+    // setEngineId ignore un moteur inconnu, setSearxUrl / setProviderUrl
+    // refusent un schema non http(s) : un fichier modifie ne peut pas
+    // transformer le navigateur en client arbitraire.
+    if (!d.engineId.isEmpty())    m_search->setEngineId(d.engineId);
+    if (!d.searxUrl.isEmpty())    m_search->setSearxUrl(d.searxUrl);
+    if (!d.providerUrl.isEmpty()) m_search->setProviderUrl(d.providerUrl);
+    m_search->setAutoFallback(d.autoFallback);
+    m_search->setRemoteSuggestions(d.remoteSuggestions);
+
+    for (const QString &h : d.imageAllowedHosts)
+        m_interceptor->setImageHostAllowed(h, true);
 
     m_interceptor->setDataSaverEnabled(m_dataSaver);
     m_interceptor->setImagesOff(m_imagesOff);
     m_interceptor->setUltraEcoEnabled(m_ultraEco);
-    m_zoom = zoom;
+    m_zoom = d.zoom;
 
-    m_quality = quality;
-    m_imageOptimizer.setQuality(m_ultraEco ? qMin(quality, 50) : quality);
-    if (m_ecoPanel) m_ecoPanel->setQualityValue(m_ultraEco ? 50 : quality);
+    m_quality = d.quality;
+    m_imageOptimizer.setQuality(m_ultraEco ? qMin(d.quality, 50) : d.quality);
+    if (m_ecoPanel) m_ecoPanel->setQualityValue(d.quality);
     m_omni->refreshEngineBadge();
     syncEcoWidgets();
     if (m_isPrivate) setWindowTitle(QStringLiteral("%1 — Privé (mémoire seule)").arg(QLatin1String(kAppName)));
@@ -2051,32 +2024,33 @@ void MainWindow::loadSettings() {
 }
 
 void MainWindow::saveSettings() {
-    QFile f(m_settingsPath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) return;
-    QTextStream out(&f);
-    out << "# DataSaver Browser — réglages (format clé=valeur, compatible Windows)\n";
-    out << "dataSaver=" << (m_dataSaver ? 1 : 0) << "\n";
-    out << "imagesOff=" << (m_imagesOff ? 1 : 0) << "\n";
-    out << "ultraEco=" << (m_ultraEco ? 1 : 0) << "\n";
-    out << "favicons=" << (m_favicons ? 1 : 0) << "\n";
-    out << "quality=" << m_quality << "\n";
-    out << "zoom=" << QString::number(m_zoom, 'f', 2) << "\n";
-    out << "engine=" << m_search->engineId() << "\n";
-    out << "searxUrl=" << m_search->searxUrl() << "\n";
-    out << "providerUrl=" << m_search->providerUrl() << "\n";
-    out << "autoFallback=" << (m_search->autoFallback() ? 1 : 0) << "\n";
-    out << "remoteSuggest=" << (m_search->remoteSuggestions() ? 1 : 0) << "\n";
-    out << "restoreSession=" << (m_restoreSession ? 1 : 0) << "\n";
-    const QStringList imgAllowed = m_interceptor->imageAllowedHosts();
-    out << "imageAllow=" << imgAllowed.join(QLatin1Char('|')) << "\n";
+    // Les donnees de session ne sont jamais ecrites en mode prive.
+    SettingsData d;
+    d.dataSaver = m_dataSaver;
+    d.imagesOff = m_imagesOff;
+    d.ultraEco = m_ultraEco;
+    d.favicons = m_favicons;
+    d.quality = m_quality;
+    d.zoom = m_zoom;
+    d.engineId = m_search->engineId();
+    d.searxUrl = m_search->searxUrl();
+    d.providerUrl = m_search->providerUrl();
+    d.autoFallback = m_search->autoFallback();
+    d.remoteSuggestions = m_search->remoteSuggestions();
+    d.restoreSession = m_restoreSession;
+    d.imageAllowedHosts = m_interceptor->imageAllowedHosts();
+
     if (!m_isPrivate) {
-        QStringList urls;
-        for (int i = 0; i < m_tabs->count() && urls.size() < 12; ++i) {
+        for (int i = 0; i < m_tabs->count() && d.session.size() < kMaxSessionTabs; ++i) {
             const QString u = m_tabs->widget(i) ? currentUrlOf(i) : QString();
-            if (!u.isEmpty()) urls << u;
+            if (!u.isEmpty()) d.session << u;
         }
-        out << "session=" << urls.join(QLatin1Char('|')) << "\n";
     }
+
+    // Ecriture atomique (QSaveFile) : une coupure pendant la sauvegarde ne
+    // peut pas tronquer settings.txt et reinitialiser tous les reglages.
+    if (!SettingsStore::save(m_settingsPath, d))
+        setStatus(tr("Réglages non enregistrés (dossier non inscriptible ?)"), 6000);
 }
 
 QString MainWindow::currentUrlOf(int index) const {

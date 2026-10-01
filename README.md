@@ -297,6 +297,46 @@ ou un profil réel, ni les réglages laissés par un autre test.
 
 ---
 
+## Développement
+
+Les données de développement ne sont **jamais** dans l'arbre source : elles
+vont dans `~/.local/share/BrowserECO/dev`. On peut donc supprimer `build/`,
+reconfigurer ou faire n'importe quelle manip dans le dépôt sans toucher à un
+profil de navigation.
+
+```bash
+./dev.sh                 # compile si besoin et lance l'application (données isolées)
+./dev.sh test            # compile + 12 suites de tests
+./dev.sh check           # compilation propre (0 warning) + tests + .desktop + version
+./dev.sh install [préf.] # installe (par défaut ~/Applications/BrowserECO-dev)
+./dev.sh clean           # supprime build/
+./dev.sh purge-data      # supprime les données de dev (demande confirmation)
+```
+
+### Deux installations, deux profils
+
+| | Copie personnelle | Développement |
+|---|---|---|
+| Version | figée sur un tag | en cours |
+| Installation | `~/Applications/BrowserECO-<version>` | `./dev.sh install` |
+| Données | `~/.local/share/BrowserECO/perso` | `~/.local/share/BrowserECO/dev` |
+
+Le dossier de données est choisi par `--data-dir` (ou `BROWSERECO_DATA_DIR`) :
+on peut donc mettre le binaire sur une clé USB ou une partition NTFS **sans
+risque**, les bases SQLite (WAL) restant sur un disque ext4.
+
+### Règles de contribution
+
+- `settings.txt`, les bases, `WebEngineProfile/` et les données de navigation
+  ne doivent jamais être committés (`.gitignore` s'en charge) ;
+- toute correction de bug s'accompagne d'un test dans `tests/` ;
+- le format de `settings.txt` est centralisé dans `SettingsStore`, testé par
+  `test_settings` — ne pas dupliquer la logique de lecture ailleurs ;
+- `./dev.sh check` doit sortir « TOUT EST VERT » avant un commit ;
+- version : une seule source, `CMakeLists.txt` ; les tags Git marquent les versions.
+
+---
+
 ## Structure
 
 ```
@@ -304,6 +344,7 @@ BrowserECO-Linux/
 ├── CMakeLists.txt                  ← cible unique, warnings, tests, install, CPack
 ├── LICENCE                         ← GPL-3.0 (texte intégral)
 ├── run_tests.sh                    ← build + ctest
+├── dev.sh                          ← point d'entrée du développement (run/test/check/install)
 ├── INSTALL.sh / UNINSTALL.sh       ← installation portable (+ .deb via cpack)
 ├── settings.txt.exemple            ← modèle de réglages (sans session)
 ├── BrowserECO.desktop.in           ← modèle d'entrée de menu (généré à l'install)
@@ -318,6 +359,7 @@ BrowserECO-Linux/
 │   ├── services/
 │   │   ├── searchengine.{h,cpp}    ← 9 moteurs, bangs, suggestions
 │   │   ├── serpguard.{h,cpp}       ← détection des murs anti-bot
+│   │   ├── settingsstore.{h,cpp}   ← lecture/écriture atomique de settings.txt
 │   │   ├── adblocker.{h,cpp}
 │   │   ├── cachemanager.{h,cpp}
 │   │   ├── historymanager.{h,cpp}
