@@ -3,6 +3,66 @@
 #include <QDebug>
 #include <QRegularExpression>
 
+/* Correspondance « site » / liste d'exceptions, avec frontieres de label :
+   "example.com" couvre "www.example.com" et "cdn.example.com", mais pas
+   "notexample.com" (une simple recherche de sous-chaine le ferait). */
+bool EcoInterceptor::hostMatchesAllowList(const QString &host, const QSet<QString> &allowed)
+{
+    if (host.isEmpty() || allowed.isEmpty()) return false;
+    const QString h = host.toLower();
+    if (allowed.contains(h)) return true;
+    // Remonte les sous-domaines un label a la fois.
+    int dot = h.indexOf(QLatin1Char('.'));
+    while (dot >= 0) {
+        if (allowed.contains(h.mid(dot + 1))) return true;
+        dot = h.indexOf(QLatin1Char('.'), dot + 1);
+    }
+    return false;
+}
+
+void EcoInterceptor::setImageHostAllowed(const QString &siteHost, bool allowed)
+{
+    const QString host = siteHost.trimmed().toLower();
+    if (host.isEmpty()) return;
+    {
+        QWriteLocker lock(&m_imageLock);
+        if (allowed) m_imageAllowed.insert(host);
+        else m_imageAllowed.remove(host);
+    }
+    // Les compteurs sont remis a jour : la page affichee n'a plus d'images
+    // bloquees a l'ecran, laisser l'ancien total induirait en erreur.
+    resetStats();
+}
+
+bool EcoInterceptor::isImageHostAllowed(const QString &siteHost) const
+{
+    QReadLocker lock(&m_imageLock);
+    return hostMatchesAllowList(siteHost, m_imageAllowed);
+}
+
+QStringList EcoInterceptor::imageAllowedHosts() const
+{
+    QReadLocker lock(&m_imageLock);
+    QStringList out(m_imageAllowed.constBegin(), m_imageAllowed.constEnd());
+    out.sort();
+    return out;
+}
+
+void EcoInterceptor::clearImageAllowedHosts()
+{
+    {
+        QWriteLocker lock(&m_imageLock);
+        m_imageAllowed.clear();
+    }
+    resetStats();
+}
+
+int EcoInterceptor::imageAllowedCount() const
+{
+    QReadLocker lock(&m_imageLock);
+    return int(m_imageAllowed.size());
+}
+
 EcoInterceptor::EcoInterceptor(AdBlocker *adblocker, QObject *parent)
     : QWebEngineUrlRequestInterceptor(parent), m_adblocker(adblocker)
 {}
@@ -190,9 +250,11 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
         }
     }
 
-    // 3. Images OFF
-    if (m_imagesOff && type == QWebEngineUrlRequestInfo::ResourceTypeImage) {
-        qDebug() << "EcoInterceptor: blocked (image off)" << urlStr.left(120);
+    // 3. Images OFF — sauf si l'utilisateur a autorise ce site (exception
+    //    memorisee). La decision porte sur le site visite, pas sur l'hote de
+    //    l'image : les images viennent presque toujours d'un autre domaine.
+    if (m_imagesOff && type == QWebEngineUrlRequestInfo::ResourceTypeImage
+        && !isImageHostAllowed(info.firstPartyUrl().host())) {
         info.block(true);
         noteBlock(EcoCategory::Images);
         return;

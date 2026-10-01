@@ -4,6 +4,9 @@
 #include "services/adblocker.h"
 #include <QAtomicInt>
 #include <QAtomicInteger>
+#include <QSet>
+#include <QReadWriteLock>
+#include <QStringList>
 #include <QVector>
 
 /*
@@ -38,6 +41,23 @@ public:
     void setDataSaverEnabled(bool e) { m_dataSaver = e; }
     void setImagesOff(bool off) { m_imagesOff = off; }
     void setUltraEcoEnabled(bool e) { m_ultraEco = e; }
+    /* ---- Exceptions d'images par site -------------------------------------
+     * « Images OFF » est le reglage le plus rentable (-90 % de moyenne mesuree),
+     * mais il rend les sites photos/recettes illisibles. L'utilisateur peut
+     * donc autoriser les images site par site : la decision porte sur le site
+     * VISITE (firstPartyUrl), pas sur l'hote de l'image, car les images sont
+     * presque toujours servies par un CDN (i.ytimg.com, cloudfront...).
+     * Ces exceptions sont memorisees (reglage imageAllow=).
+     */
+    void setImageHostAllowed(const QString &siteHost, bool allowed);
+    bool isImageHostAllowed(const QString &siteHost) const;
+    QStringList imageAllowedHosts() const;
+    void clearImageAllowedHosts();
+    int imageAllowedCount() const;
+    // Fonction pure : correspondance site/exception sur frontieres de label,
+    // donc « notexample.com » ne beneficie PAS de l'exception « example.com ».
+    static bool hostMatchesAllowList(const QString &host, const QSet<QString> &allowed);
+
     // Autorise les images des pages de verification anti-bot (captcha).
     // Sans cela, l'utilisateur voit "challenge" mais ne peut pas le resoudre :
     // le blocage d'images rend la page insoluble.
@@ -95,6 +115,10 @@ private:
     bool m_ultraEco = false;
     bool m_allowChallengeImages = true;
     QAtomicInt m_statsDirty = 0;
+    // Liste des sites ou les images sont autorisees. Relue sur le thread IO a
+    // chaque requete d'image et modifiee depuis l'IHM : acces verrouille.
+    QSet<QString> m_imageAllowed;
+    mutable QReadWriteLock m_imageLock;
     QAtomicInt m_blockedCount = 0;
     QAtomicInt m_allowedCount = 0;
     QAtomicInteger<qint64> m_byCat[kEcoCategoryCount];

@@ -459,13 +459,23 @@ void UiTest::menuContextuel_Page()
     auto *view = qobject_cast<QWebEngineView *>(tabs->currentWidget());
     QVERIFY(view);
 
+    // L'entree d'exception d'images n'a de sens que sur une page web : on donne
+    // donc a la vue une URL http comme base (aucune requete reseau, le contenu
+    // est fourni par setHtml).
+    view->setHtml(QStringLiteral("<html><body><a href=\"https://exemple.fr/pic.jpg\">lien</a></body></html>"),
+                  QUrl(QStringLiteral("https://exemple.test/page")));
+    QTest::qWait(400);
+
     QStringList actions;
+    int checkedImages = -1;
     int shotCount = 0;
-    QTimer::singleShot(900, this, [&actions, &shotCount]{
+    QTimer::singleShot(900, this, [&actions, &checkedImages, &shotCount]{
         if (QMenu *m = qobject_cast<QMenu *>(QApplication::activePopupWidget())) {
-            actions = m->actions().isEmpty()
-                    ? QStringList()
-                    : [&]{ QStringList l; for (QAction *a : m->actions()) l << a->text(); return l; }();
+            for (QAction *a : m->actions()) {
+                actions << a->text();
+                if (a->text().contains(QStringLiteral("Images de ce site")))
+                    checkedImages = a->isChecked() ? 1 : 0;
+            }
             shotCount = 1;
             shot(m, "17-menu-contextuel");
             m->close();
@@ -485,6 +495,12 @@ void UiTest::menuContextuel_Page()
     QVERIFY2(joined.contains(QStringLiteral("Zoom")), "Zoom absent");
     QVERIFY2(joined.contains(QStringLiteral("code source")), "code source absent");
     QVERIFY2(joined.contains(QStringLiteral("Inspecter")), "Inspecter absent");
+    // L'entree d'exception d'images est le coeur du palier A : elle doit etre
+    // presente et refler l'etat reel du site affiche.
+    QVERIFY2(joined.contains(QStringLiteral("Images de ce site")),
+             "entree « Images de ce site » absente du menu contextuel");
+    // L'onglet de test affiche about:home : aucune exception, donc non coche.
+    QCOMPARE(checkedImages, 0);
     Q_UNUSED(shotCount);
 }
 

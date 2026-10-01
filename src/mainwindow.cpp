@@ -124,9 +124,12 @@ MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode
         m_profile->setHttpCacheMaximumSize(100 * 1024 * 1024);
     }
 
-    // Services
-    m_cache = new CacheManager(QString(), 100 * 1024 * 1024);
-    m_history = new HistoryManager(QString());
+    // Services : les bases suivent le dossier de profil (--data-dir), sinon
+    // elles restaient a cote du binaire et se retrouvaient hors du dossier
+    // choisi par l'utilisateur.
+    m_cache = new CacheManager(QDir(settingsDir).filePath(QStringLiteral("cache.db")),
+                               100 * 1024 * 1024);
+    m_history = new HistoryManager(QDir(settingsDir).filePath(QStringLiteral("history.db")));
     m_search = new SearchEngineManager(this);
     m_serpGuard = new SerpGuard(this);
 
@@ -1269,6 +1272,34 @@ void MainWindow::buildPageContextMenu(QWebEngineView *view, const QPoint &global
     }
 
     auto *page = view->page();
+
+    // Exception d'images du site visite : « Images OFF » est le reglage le
+    // plus rentable (-90 % de moyenne mesuree) mais rend les sites photos
+    // illisibles. Le clic droit autorise CE site, une fois pour toutes.
+    // La decision porte sur le site visite, pas sur l'hote de l'image : les
+    // images viennent presque toujours d'un autre domaine (CDN).
+    const QString pageHost = page->url().host();
+    if (isWebUrl(page->url()) && !pageHost.isEmpty()) {
+        const bool allowed = m_interceptor->isImageHostAllowed(pageHost);
+        QAction *img = menu.addAction(tr("Images de ce site"));
+        img->setCheckable(true);
+        img->setChecked(allowed);
+        img->setIcon(Icons::eyeOff());
+        connect(img, &QAction::triggered, this, [this, pageHost, allowed]{
+            m_interceptor->setImageHostAllowed(pageHost, !allowed);
+            saveSettings();
+            syncEcoWidgets();
+            updateStats();
+            setStatus(allowed
+                          ? tr("Images de nouveau bloquées sur %1").arg(pageHost)
+                          : tr("Images autorisées sur %1 — page rechargée").arg(pageHost), 5000);
+            // Rechargement necessaire : sans lui, les images resteraient
+            // absentes de la page deja affichee et le reglage semblerait inopérant.
+            if (auto v = currentView()) v->reload();
+        });
+        menu.addSeparator();
+    }
+
     if (page->isLoading()) {
         QAction *a = menu.addAction(tr("Arrêter le chargement"));
         a->setIcon(Icons::stop());
@@ -1358,6 +1389,11 @@ void MainWindow::showMenuAt(const QPoint &globalPos)
         add(14, tr("Vider le cache"), Icons::trash());
         add(15, tr("Réinitialiser les statistiques"), Icons::trash());
         add(16, tr("Raccourcis clavier"), Icons::list());
+        // Reinitialisation des exceptions d'images : visible seulement s'il y
+        // en a au moins une, sinon l'entree serait toujours grise.
+        if (m_interceptor->imageAllowedCount() > 0) {
+            add(18, tr("Images autorisées : tout réinitialiser"), Icons::trash());
+        }
         add(17, tr("À propos de %1").arg(QLatin1String(kAppName)), Icons::shield());
         if (m_isPrivate) {
             menu.addSeparator();
@@ -1392,6 +1428,14 @@ void MainWindow::applySessionAction(int actionId)
     case 15: m_interceptor->resetStats(); updateStats(); setStatus(tr("Statistiques remises à zéro"), 2500); break;
     case 16: showShortcuts(); break;
     case 17: showAbout(); break;
+    case 18:
+        m_interceptor->clearImageAllowedHosts();
+        saveSettings();
+        syncEcoWidgets();
+        updateStats();
+        setStatus(tr("Exceptions d'images réinitialisées"), 4000);
+        if (auto v = currentView()) v->reload();
+        break;
     default: break;
     }
 }
@@ -1797,7 +1841,10 @@ void MainWindow::updateStats() {
         return;   // un message temporaire (erreur, telechargement) garde la main
     refreshStatusLine();
     QString eco = m_ultraEco ? tr("ULTRA") : (m_dataSaver ? tr("ON") : tr("OFF"));
-    if (m_imagesOff) eco += QStringLiteral(" +NoImg");
+    if (m_imagesOff) {
+        const int n = m_interceptor->imageAllowedCount();
+        eco += n > 0 ? QStringLiteral(" +NoImg/%1").arg(n) : QStringLiteral(" +NoImg");
+    }
     m_statsLabel->setText(tr("Eco %1 · %2 bloqués · ≈%3")
                               .arg(eco).arg(blocked).arg(humanBytes(m_interceptor ? m_interceptor->estimatedSavedBytes() : 0)));
     if (m_ecoPanel && m_ecoPanel->isVisible()) m_ecoPanel->refresh();
@@ -1978,6 +2025,13 @@ void MainWindow::loadSettings() {
             else if (key == QLatin1String("autoFallback")) m_search->setAutoFallback(val.toInt() != 0);
             else if (key == QLatin1String("remoteSuggest"))m_search->setRemoteSuggestions(val.toInt() != 0);
             else if (key == QLatin1String("restoreSession")) m_restoreSession = val.toInt() != 0;
+            else if (key == QLatin1String("imageAllow")) {
+                // Sites ou les images sont autorisees malgre « Images OFF ».
+                const QStringList hosts = val.split(QLatin1Char('|'), Qt::SkipEmptyParts);
+                for (const QString &h : hosts)
+                    if (!h.contains(QLatin1Char('/')) && h.contains(QLatin1Char('.')))
+                        m_interceptor->setImageHostAllowed(h.trimmed(), true);
+            }
             else if (key == QLatin1String("session"))     m_session = val.split(QLatin1Char('|'), Qt::SkipEmptyParts);
         }
     }
@@ -2013,6 +2067,8 @@ void MainWindow::saveSettings() {
     out << "autoFallback=" << (m_search->autoFallback() ? 1 : 0) << "\n";
     out << "remoteSuggest=" << (m_search->remoteSuggestions() ? 1 : 0) << "\n";
     out << "restoreSession=" << (m_restoreSession ? 1 : 0) << "\n";
+    const QStringList imgAllowed = m_interceptor->imageAllowedHosts();
+    out << "imageAllow=" << imgAllowed.join(QLatin1Char('|')) << "\n";
     if (!m_isPrivate) {
         QStringList urls;
         for (int i = 0; i < m_tabs->count() && urls.size() < 12; ++i) {

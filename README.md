@@ -1,14 +1,15 @@
 # BrowserECO-Linux — DataSaver Browser (Qt6 C++)
 
 Navigateur portable Linux orienté **économie de données** et **vie privée**.
-Version **1.2** — robustesse, blocage adverts conforme, build et tests propres.
+Version **1.3** — exception d'images par site, robustesse, blocage adverts
+conforme, build et tests propres.
 
 > L'original (version 1.0) est conservé tel quel dans
 > `BACKUP-original-20260929-113846/` : sources, binaire et réglages.
 
 ---
 
-## Ce que la 1.2 corrige
+## Ce que la 1.3 apporte
 
 ### Blocage contournable / mal interprété
 
@@ -62,6 +63,30 @@ Version **1.2** — robustesse, blocage adverts conforme, build et tests propres
   dépôt, `settings.txt.exemple` vierge (le fichier réel contenait une URL de
   session privée), `LICENCE` GPL-3.0, attribution des listes de filtres,
   CI GitHub Actions, `.deb` et métadonnées AppStream.
+
+### Images : exception par site (palier A)
+
+« Images OFF » est le réglage le plus rentable — mesuré sur une photo 1600×1067
+(308 Ko) : 182 Ko en 1280 px, 76 Ko en 800 px, 29 Ko en 480 px, soit **−41 % à
+−91 %**. Mais il rend les sites photos, recettes ou documentation illisibles.
+
+Le clic droit propose donc **« Images de ce site »** (entrée cochable qui reflète
+l'état réel), et l'autorisation est mémorisée :
+
+- la décision porte sur **le site visité**, pas sur l'hôte de l'image : les
+  images viennent presque toujours d'un CDN (`i.ytimg.com`, `cloudfront`…) ;
+- la correspondance se fait sur les **frontières de label** : `example.com`
+  couvre `www.example.com` et `cdn.example.com`, mais **pas** `notexample.com` ;
+- le réglage est persisté dans `settings.txt` (`imageAllow=`) ; une entrée
+  contenant un `/` ou sans point est ignorée à la lecture ;
+- la page est rechargée après bascule, sinon les images resteraient absentes de
+  l'écran et le réglage semblerait sans effet ;
+- la barre d'état indique le nombre d'exceptions : `Eco ON +NoImg/2` ;
+- remise à zéro : Menu → *Images autorisées : tout réinitialiser* (entrée
+  présente seulement s'il existe au moins une exception).
+
+Le curseur « qualité des images » reste, lui, sans effet tant que la
+compression n'est pas branchée (voir *Limite connue*).
 
 ### Ergonomie
 
@@ -254,7 +279,7 @@ pour ceux qui démarrent QtWebEngine) et s'exécute dans son propre dossier vide
 recréé à chaque exécution — aucun test ne peut voir un `settings.txt`, une base
 ou un profil réel, ni les réglages laissés par un autre test.
 
-**11 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
+**12 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
 
 | Suite | Couverture |
 |---|---|
@@ -265,9 +290,10 @@ ou un profil réel, ni les réglages laissés par un autre test.
 | `test_homepage` | aucun placeholder résiduel, CSS intact |
 | `test_icons` | chaque icône dessine bien des pixels |
 | `test_eco_stats` | cohérence et bornage des compteurs d'économie |
+| `test_images` | exceptions d'images par site : frontières de label, sous-domaines, faux positifs (`notexample.com`), persistance, idempotence |
 | `serp_test` | repli anti-challenge, détection de mur, exemption d'images sur les pages de vérification |
 | `freeze_test` | anti-gel : Menu → Téléchargements, thread témoin |
-| `ui_test` | **21 tests d'interface** : barre d'adresse, suggestions, panneau Eco, historique, raccourcis, onglets, zoom, raccourcis annoncés = réels, menu contextuel, bouton Eco |
+| `ui_test` | **21 tests d'interface** (dont menu contextuel et entrée d'exception d'images) : barre d'adresse, suggestions, panneau Eco, historique, raccourcis, onglets, zoom, raccourcis annoncés = réels, menu contextuel, bouton Eco |
 
 ---
 
@@ -326,6 +352,7 @@ providerUrl=https://duckduckgo.com/ac/
 autoFallback=1       # bascule si mur anti-bot
 remoteSuggest=1      # suggestions réseau (~200 o)
 restoreSession=0
+imageAllow=          # sites dont les images sont autorisées (clic droit)
 session=             # écrit automatiquement à la sortie (URLs séparées par « | »)
 ```
 
