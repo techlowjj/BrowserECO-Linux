@@ -176,6 +176,12 @@ void SerpTest::hotesDeChallengeReconnus()
  */
 void SerpTest::imageDuChallengeAutorisee()
 {
+    // Test qui charge une VRAIE page DuckDuckGo. Depuis un runner CI (adresse
+    // cloud), le moteur sert un mur anti-bot different (ou expire) : le test
+    // devient alors aleatoire et fait rougir la CI pour une raison exterieure
+    // au code. Il est donc reserve a un execution locale explicite.
+    if (!qEnvironmentVariableIsSet("BROWSERECO_NET_TESTS"))
+        QSKIP("test reseau : definir BROWSERECO_NET_TESTS=1 pour l'executer");
     EcoInterceptor *eco = w->interceptor();
     QVERIFY(eco);
     QVERIFY2(eco->imagesOff(), "le test suppose le mode 'images bloquees' actif");
@@ -252,6 +258,8 @@ void SerpTest::imageDuChallengeAutorisee()
 
 void SerpTest::repliSeDeclenche_SurChallenge()
 {
+    if (!qEnvironmentVariableIsSet("BROWSERECO_NET_TESTS"))
+        QSKIP("test reseau : definir BROWSERECO_NET_TESTS=1 pour l'executer");
     // Rejoue une vraie recherche et observe la fin de parcours.
     QMetaObject::invokeMethod(w, "onUrlEntered", Qt::DirectConnection,
                               Q_ARG(QUrl, QUrl(QStringLiteral(

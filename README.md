@@ -297,7 +297,7 @@ ou un profil réel, ni les réglages laissés par un autre test.
 | `test_icons` | chaque icône dessine bien des pixels |
 | `test_eco_stats` | cohérence et bornage des compteurs d'économie |
 | `test_images` | exceptions d'images par site : frontières de label, sous-domaines, faux positifs (`notexample.com`), persistance, idempotence |
-| `serp_test` | repli anti-challenge, détection de mur, exemption d'images sur les pages de vérification |
+| `serp_test` | repli anti-challenge, détection de mur, exemption d'images sur les pages de vérification. **2 cas font de vraies requêtes réseau** : ignorés sauf si `BROWSERECO_NET_TESTS=1` (un runner CI, en adresse cloud, reçoit un mur anti-bot différent et rendrait le test instable) |
 | `freeze_test` | anti-gel : Menu → Téléchargements, thread témoin |
 | `ui_test` | **21 tests d'interface** (dont menu contextuel et entrée d'exception d'images) : barre d'adresse, suggestions, panneau Eco, historique, raccourcis, onglets, zoom, raccourcis annoncés = réels, menu contextuel, bouton Eco |
 

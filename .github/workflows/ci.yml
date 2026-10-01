@@ -51,6 +51,9 @@ jobs:
       - name: Tests (headless)
         env:
           QT_QPA_PLATFORM: offscreen
+          # Chromium ne peut pas ouvrir son bac a sable ni utiliser /dev/shm
+          # sur un runner CI : sans ces options, QtWebEngine ne demarre pas.
+          QTWEBENGINE_CHROMIUM_FLAGS: --no-sandbox --disable-dev-shm-usage --disable-gpu
         run: ctest --test-dir build --output-on-failure
 
       - name: Valider le fichier .desktop
