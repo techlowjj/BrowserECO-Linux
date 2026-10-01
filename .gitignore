@@ -45,6 +45,10 @@ bolt-export/
 # Elles sont volumineuses et se regenerent : voir Filters/README.md
 /Filters/*.txt
 
+# Entree de menu locale (contient des chemins propres a la machine)
+# Le modele versionne est BrowserECO.desktop.example et BrowserECO.desktop.in
+/BrowserECO.desktop
+
 # ---- Divers ----------------------------------------------------------------
 *.log
 .DS_Store

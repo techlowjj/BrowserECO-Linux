@@ -1,0 +1,29 @@
+# Exemple d'entree de menu pour l'installation PORTABLE.
+#
+# L'application installee proprement (cmake --install / paquet .deb) genere
+# automatiquement une entree correcte : BrowserECO.desktop.in
+#   -> build/BrowserECO.desktop        (prefixe de configuration)
+#   -> <prefixe>/share/applications/  (prefixe reel, --prefix compris)
+# Ce fichier sert uniquement quand on deploie l'application a la main dans un
+# dossier : copiez-le en BrowserECO.desktop et remplacez les deux chemins.
+[Desktop Entry]
+Type=Application
+Name=DataSaver Browser
+GenericName=BrowserECO Linux
+Comment=Navigateur économe en données — bloque pubs/trackers, 70% d'économie
+Exec=/chemin/vers/BrowserECO-Linux/BrowserECO.sh
+Icon=/chemin/vers/BrowserECO-Linux/app_icon_512.png
+Terminal=false
+Categories=Network;WebBrowser;
+Keywords=browser;web;eco;datasaver;
+StartupNotify=true
+StartupWMClass=BrowserECO
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=Nouvelle fenêtre
+Exec=/chemin/vers/BrowserECO-Linux/BrowserECO.sh
+
+[Desktop Action new-private-window]
+Name=Nouvelle fenêtre privée
+Exec=/chemin/vers/BrowserECO-Linux/BrowserECO.sh --private

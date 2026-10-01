@@ -306,6 +306,8 @@ BrowserECO-Linux/
 ├── run_tests.sh                    ← build + ctest
 ├── INSTALL.sh / UNINSTALL.sh       ← installation portable (+ .deb via cpack)
 ├── settings.txt.exemple            ← modèle de réglages (sans session)
+├── BrowserECO.desktop.in           ← modèle d'entrée de menu (généré à l'install)
+├── BrowserECO.desktop.example      ← idem pour un déploiement portable manuel
 ├── cmake/                          ← version.h.in, install_desktop.cmake.in
 ├── packaging/                      ← AppStream (métadonnées .deb)
 ├── src/
