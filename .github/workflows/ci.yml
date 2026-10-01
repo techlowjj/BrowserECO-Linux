@@ -18,16 +18,15 @@ jobs:
       # AUCUN job ne demarre (le run est « failure » avec 0 job).
       matrix:
         include:
-          # -Werror seulement sur la toolchain la plus recente : les avertissements
-          # varient selon le GCC, on ne veut pas un depot rouge pour une
-          # difference de version du compilateur.
+          # Plancher Qt documente : 6.4 (Ubuntu 24.04). Ubuntu 22.04 embarque
+          # Qt 6.2.4, en dessous du plancher : il ne sert plus a valider quoi
+          # que ce soit et fait echouer le depot pour une cause hors code.
           - os: ubuntu-24.04
             strict: 'ON'
-          - os: ubuntu-22.04
-            strict: 'OFF' 
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Récupérer le code
+        uses: actions/checkout@v4
 
       - name: Installer les dépendances
         run: |
@@ -36,7 +35,8 @@ jobs:
           # deux, avec un garde #if QT_VERSION pour les rares API plus recentes.
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ qt6-base-dev qt6-webengine-dev \
-            desktop-file-utils
+            desktop-file-utils \
+            libqt6sql6-sqlite   # moteur SQLite : sans lui l'historique ne fonctionne pas
 
       - name: Configurer
         run: |
@@ -47,6 +47,9 @@ jobs:
 
       - name: Compiler
         run: cmake --build build --parallel
+
+      - name: Listes de filtres
+        run: Filters/update.sh
 
       - name: Tests (headless)
         env:

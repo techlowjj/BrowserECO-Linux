@@ -230,8 +230,14 @@ Elles n'étaient pas visibles avant les tests :
 ### Prérequis
 
 ```bash
-sudo apt install qt6-base-dev qt6-webengine-dev cmake g++
+sudo apt install qt6-base-dev qt6-webengine-dev libqt6sql6-sqlite cmake g++
 ```
+
+`libqt6sql6-sqlite` apporte le **moteur SQLite** : sans lui, Qt ne sait pas
+ouvrir les bases et l'application perd l'historique et le cache *silencieusement*
+(c'est ce que la CI a révélé : aucune base, aucun message). Ce n'est pas un
+paquet de développement, il est aussi nécessaire à l'exécution — d'où son
+présence dans les dépendances du paquet `.deb`.
 
 **Qt 6.4 minimum** (validé par la CI sur Qt 6.4.2 / Ubuntu 24.04 ; testé en
 développement sur Qt 6.8). Les rares API plus récentes — délai maximal d'une
@@ -357,6 +363,7 @@ BrowserECO-Linux/
 ├── BrowserECO.desktop.example      ← idem pour un déploiement portable manuel
 ├── cmake/                          ← version.h.in, install_desktop.cmake.in
 ├── packaging/                      ← AppStream (métadonnées .deb)
+├── Filters/update.sh               ← récupère EasyList/EasyPrivacy
 ├── src/
 │   ├── main.cpp
 │   ├── mainwindow.{h,cpp,ui}       ← barre d'adresse, barre d'onglets, menu
@@ -376,7 +383,9 @@ BrowserECO-Linux/
 │       └── icons.{h,cpp}           ← icônes vectorielles (QPainter)
 ├── tests/                          ← 11 tests + CMakeLists.txt (CTest)
 ├── Filters/                        ← EasyList + EasyPrivacy (~116 000 règles)
-│                                    + LICENSE/README (attribution obligatoire)
+│   ├── update.sh                   ← téléchargement des listes (non versionnées)
+│   ├── LICENSE                     ← attribution obligatoire
+│   └── README.md
 └── .github/workflows/ci.yml        ← build, tests, .desktop, .deb
 ```
 

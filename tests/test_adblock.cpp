@@ -149,10 +149,14 @@ void TestAdblock::performance_UnAppelParRequete()
 {
     // Sur les vraies listes : shouldBlock() est appele sur le thread IO de
     // QtWebEngine. Il doit rester tres rapide (microsecondes, pas milliemes).
+    // Les listes ne sont pas versionnees (voir Filters/update.sh) : le test
+    // s'ignore proprement si elles n'ont pas ete telechargees. La CI les
+    // recupere explicitement, donc le test s'execute vraiment la-bas.
     const QString dir = QStringLiteral(BROWSERECO_SOURCE_DIR "/Filters");
-    if (!QDir(dir).exists()) {
-        qInfo("  (Filters/ absent : test de performance ignore)");
-        QSKIP("Filters/ absent");
+    if (!QDir(dir).exists()
+        || QDir(dir).entryList(QStringList() << QStringLiteral("*.txt"), QDir::Files).isEmpty()) {
+        qInfo("  (aucune liste de filtres : lancer Filters/update.sh pour ce test)");
+        QSKIP("aucune liste de filtres dans Filters/");
     }
     AdBlocker a;
     a.loadFilters(dir);
