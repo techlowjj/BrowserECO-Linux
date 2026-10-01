@@ -12,13 +12,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Chaque entree associe explicitement sa version d'Ubuntu et la striccete
+      # de la compilation. Un « include » avec une liste de valeurs poserait
+      # matrix.strict = tableau : la matrice n'est alors plus expansee et
+      # AUCUN job ne demarre (le run est « failure » avec 0 job).
       matrix:
-        os: [ ubuntu-24.04, ubuntu-22.04 ]
         include:
           # -Werror seulement sur la toolchain la plus recente : les avertissements
-          #varies selon le GCC, on ne veut pas un depot rouge pour une difference
-          # de version du compilateur.
-          strict: [ true, false ]
+          # varient selon le GCC, on ne veut pas un depot rouge pour une
+          # difference de version du compilateur.
+          - os: ubuntu-24.04
+            strict: 'ON'
+          - os: ubuntu-22.04
+            strict: 'OFF' 
 
     steps:
       - uses: actions/checkout@v4
