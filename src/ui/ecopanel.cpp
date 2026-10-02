@@ -382,10 +382,10 @@ void EcoPanel::refresh()
         if (dl > 0) {
             const int pct = dl > 0 ? int(100.0 * gain / dl) : 0;
             m_imgDetail->setText(tr("%1 compressées · %2 en cache · %3→%4 (−%5 %) · %6")
-                                     .arg(m_imageServer->compressedCount())
-                                     .arg(m_imageServer->cache().hits())
-                                     .arg(humanBytes(dl)).arg(humanBytes(servi)).arg(qMax(0, pct))
-                                     .arg(format));
+                                     .arg(QString::number(m_imageServer->compressedCount()),
+                                          QString::number(m_imageServer->cache().hits()),
+                                          humanBytes(dl), humanBytes(servi),
+                                          QString::number(qMax(0, pct)), format));
         } else {
             m_imgDetail->setText(tr("aucune image mesurée pour l'instant"));
         }

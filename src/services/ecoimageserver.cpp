@@ -19,12 +19,18 @@ constexpr int kMaxRequestBytes = 16 * 1024;
 // double, corps sans Content-Length, Accept-Encoding gzip alors qu'on veut les
 // octets bruts…). Le jeton d'authentification est surtout à ne PAS renvoyer : une
 // redirection du serveur vers un autre hôte le lui transmettrait.
-const QSet<QByteArray> kDroppedHeaders = {
-    "host", "connection", "content-length", "transfer-encoding", "accept-encoding",
-    "cookie", "range", "if-range", "if-modified-since", "if-none-match",
-    "content-type", "origin", "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site",
-    "authorization", "proxy-authorization",
-};
+const QSet<QByteArray> &droppedHeaders()
+{
+    // Singleton fonctionnel : initialisation paresseuse et thread-safe (C++11),
+    // et pas d'ordre d'initialisation statique entre unites de traduction.
+    static const QSet<QByteArray> set = {
+        "host", "connection", "content-length", "transfer-encoding", "accept-encoding",
+        "cookie", "range", "if-range", "if-modified-since", "if-none-match",
+        "content-type", "origin", "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site",
+        "authorization", "proxy-authorization",
+    };
+    return set;
+}
 
 QByteArray statusText(int code)
 {
@@ -155,7 +161,7 @@ void EcoImageServer::fetchAndServe(QTcpSocket *socket, const EcoImageUrl::Target
     // Rejeu des en-têtes utiles du navigateur : User-Agent, Accept-Language…
     // (certains CDN refusent une requête sans User-Agent).
     for (auto it = entetes.cbegin(); it != entetes.cend(); ++it)
-        if (!kDroppedHeaders.contains(it.key()))
+        if (!droppedHeaders().contains(it.key()))
             req.setRawHeader(it.key(), it.value());
 
     QNetworkReply *reply = m_nam->get(req);

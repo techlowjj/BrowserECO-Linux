@@ -1,5 +1,6 @@
 #include "searchengine.h"
 
+#include <algorithm>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QNetworkRequest>
@@ -56,7 +57,7 @@ const QVector<SearchEngine> &SearchEngineManager::registry()
 
         v.append({ QStringLiteral("searx"),
                    QStringLiteral("SearXNG (méta, très précis)"),
-                   QStringLiteral(""), // construit dynamiquement depuis m_searxUrl
+                   QString(), // construit dynamiquement depuis m_searxUrl
                    QStringLiteral("searx"),
                    QStringLiteral("~10 Ko · 0 JS · agrège Google/Bing/DDG"),
                    QStringLiteral("SXR"), false, true, true });
@@ -354,7 +355,7 @@ QStringList SearchEngineManager::fallbackChain(const QString &engineId) const
     // Regle eco : on ne bascule JAMAIS vers un moteur qui necessite du JS
     // (le but est de rester leger pour la data mobile).
     QStringList light;
-    for (const QString &id : out)
+    for (const QString &id : std::as_const(out))
         if (const SearchEngine *f = byId(id))
             if (!f->needsJs) light << id;
     out = light;

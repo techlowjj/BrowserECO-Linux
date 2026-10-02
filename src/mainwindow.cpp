@@ -5,6 +5,7 @@
 #include "services/settingsstore.h"
 #include "services/ecoimageserver.h"
 
+#include <algorithm>
 #include <QApplication>
 #include <QStandardPaths>
 #include <QDir>
@@ -535,10 +536,10 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::setupConnections() {
-    connect(m_backBtn, &QToolButton::clicked, [this]{
+    connect(m_backBtn, &QToolButton::clicked, this, [this]{
         if (auto v = currentView()) v->back();
     });
-    connect(m_forwardBtn, &QToolButton::clicked, [this]{
+    connect(m_forwardBtn, &QToolButton::clicked, this, [this]{
         if (auto v = currentView()) v->forward();
     });
     connect(m_reloadBtn, &QToolButton::clicked, this, [this]{
@@ -744,7 +745,6 @@ void MainWindow::onTabBarDoubleClicked(int index) {
 // ---------------------------------------------------------------------------
 void MainWindow::onUrlEntered(const QUrl &url) {
     if (url.isEmpty()) return;
-    QString engine;
     QUrlQuery q(url);
     QString query = q.queryItemValue(QStringLiteral("q"), QUrl::FullyDecoded);
     if (query.isEmpty()) query = q.queryItemValue(QStringLiteral("query"), QUrl::FullyDecoded);
@@ -821,7 +821,7 @@ void MainWindow::onTitleChanged(const QString &title) {
     QString t = tabTitleFor(view->url(), title);
     if (t.length() > 32) t = t.left(29) + QStringLiteral("…");
     m_tabs->setTabText(idx, t);
-    for (auto *info : m_tabInfos) if (info->view == view) info->title = t;
+    for (auto *info : std::as_const(m_tabInfos)) if (info->view == view) info->title = t;
     if (view == currentView()) {
         const QString full = tabTitleFor(view->url(), title);
         setWindowTitle(full + QStringLiteral(" — ") + QLatin1String(kAppName));
@@ -1506,7 +1506,7 @@ void MainWindow::showHistory() {
         "QListWidget::item{padding:6px;}QListWidget::item:selected{background:#243046;border-radius:6px;}"));
     lay->addWidget(list, 1);
 
-    const int roleUrl = Qt::UserRole + 1;
+    constexpr int roleUrl = Qt::UserRole + 1;
     std::function<void(const QString &)> fill = [&](const QString &needle) {
         list->clear();
         const auto entries = needle.isEmpty()
@@ -1534,11 +1534,10 @@ void MainWindow::showHistory() {
     auto *debounce = new QTimer(&dlg);
     debounce->setSingleShot(true);
     debounce->setInterval(250);
-    connect(filter, &QLineEdit::textChanged, debounce, [debounce, &fill](const QString &t){
-        Q_UNUSED(t);
+    connect(filter, &QLineEdit::textChanged, debounce, [debounce](const QString &){
         debounce->start();
     });
-    connect(debounce, &QTimer::timeout, &dlg, [debounce, filter, &fill]{
+    connect(debounce, &QTimer::timeout, &dlg, [filter, fill]{
         fill(filter->text());
     });
 
@@ -1557,25 +1556,28 @@ void MainWindow::showHistory() {
     btns->addWidget(closeBtn);
     lay->addLayout(btns);
 
-    connect(list, &QListWidget::itemDoubleClicked, [this, &dlg, list, roleUrl]{
+    connect(list, &QListWidget::itemDoubleClicked, &dlg, [this, &dlg, list]{
         QListWidgetItem *it = list->currentItem();
         if (!it) return;
         const QString url = it->data(roleUrl).toString();
         if (!url.isEmpty()) { newTab(QUrl(url)); dlg.accept(); }
     });
-    connect(openBtn, &QPushButton::clicked, [this, &dlg, list, roleUrl]{
+    connect(openBtn, &QPushButton::clicked, &dlg, [this, &dlg, list]{
         QListWidgetItem *it = list->currentItem();
         if (!it) return;
         const QString url = it->data(roleUrl).toString();
         if (!url.isEmpty()) { newTab(QUrl(url)); dlg.accept(); }
     });
-    connect(delBtn, &QPushButton::clicked, [this, list, roleUrl]{
-        for (QListWidgetItem *it : list->selectedItems()) {
+    connect(delBtn, &QPushButton::clicked, list, [this, list]{
+        // selectedItems() renvoie une COPIE : on peut modifier `list` pendant
+        // l'iteration sans invalider l'iterateur (c'est le but de la copie).
+        const QList<QListWidgetItem *> selection = list->selectedItems();
+        for (QListWidgetItem *it : selection) {
             const QString url = it->data(roleUrl).toString();
             if (!url.isEmpty()) { m_history->remove(url); delete list->takeItem(list->row(it)); }
         }
     });
-    connect(clearBtn, &QPushButton::clicked, [this, filter, &fill]{
+    connect(clearBtn, &QPushButton::clicked, &dlg, [this, filter, fill]{
         if (QMessageBox::question(this, tr("Effacer l'historique"),
                 tr("Effacer tout l'historique de navigation ?")) == QMessageBox::Yes) {
             QApplication::setOverrideCursor(Qt::WaitCursor);
@@ -1661,7 +1663,7 @@ void MainWindow::showShortcuts() {
         auto *g = new QGridLayout;
         g->setHorizontalSpacing(18);
         int r = 0;
-        for (const ShortcutRow &row : m_navShortcuts) {
+        for (const ShortcutRow &row : std::as_const(m_navShortcuts)) {
             auto *k = new QLabel(row.keys, &dlg);
             k->setObjectName(QStringLiteral("keyHint"));
             k->setStyleSheet(QStringLiteral("color:#00D4AA;font-family:monospace;"));
@@ -1681,7 +1683,7 @@ void MainWindow::showShortcuts() {
         auto *g = new QGridLayout;
         g->setHorizontalSpacing(18);
         int r = 0;
-        for (const ShortcutRow &row : m_ecoShortcuts) {
+        for (const ShortcutRow &row : std::as_const(m_ecoShortcuts)) {
             auto *k = new QLabel(row.keys, &dlg);
             k->setObjectName(QStringLiteral("keyHint"));
             k->setStyleSheet(QStringLiteral("color:#00D4AA;font-family:monospace;"));
@@ -1828,7 +1830,7 @@ void MainWindow::findInPage(bool backwards) {
 // ---------------------------------------------------------------------------
 void MainWindow::setZoom(double factor) {
     m_zoom = qBound(0.25, factor, 3.0);
-    for (EcoTab *info : m_tabInfos)
+    for (EcoTab *info : std::as_const(m_tabInfos))
         if (info->view) info->view->setZoomFactor(m_zoom);
     updateZoomLabel();
     // Un cran de molette = une ecriture de fichier : on regroupe.
@@ -2193,8 +2195,8 @@ void MainWindow::startDownload(QPointer<QWebEngineDownloadRequest> download,
         m_progress->setValue(pct);
         m_progress->show();
         setStatus(tr("Téléchargement : %1 — %2 % (%3 / %4)")
-                      .arg(m_downloads[idx].fileName).arg(pct)
-                      .arg(humanBytes(rec2)).arg(humanBytes(tot)));
+                      .arg(m_downloads[idx].fileName, QString::number(pct),
+                           humanBytes(rec2), humanBytes(tot)));
     });
     connect(download, &QWebEngineDownloadRequest::stateChanged, this,
             [this, download, idx](QWebEngineDownloadRequest::DownloadState state){
