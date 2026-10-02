@@ -26,6 +26,7 @@ private slots:
     void compteursEtOctetsEconomises();
     void effacer();
     void threadedSansCourse();
+    void setBudgetEviction();
 };
 
 void TestImageCache::missPuisHit()
@@ -125,6 +126,27 @@ void TestImageCache::effacer()
     c.clear();
     QCOMPARE(c.count(), 0);
     QCOMPARE(c.usedBytes(), qint64(0));
+}
+
+void TestImageCache::setBudgetEviction()
+{
+    // Le curseur « Cache images » de l'IHM appelle setBudget(). Baisser le budget
+    // en dessous de l'usage courant doit evicter immediatement (LRU) : c'est le
+    // comportement voulu, sinon le curseur ne servirait à rien.
+    ImageCache c(64 * 1024);
+    for (int i = 0; i < 20; ++i)
+        c.put(QStringLiteral("k%1").arg(i), QByteArray(1024, 'x'), QByteArray("image/jpeg"));
+    QVERIFY(c.usedBytes() > 10 * 1024);   // ~20 Ko en cache
+
+    c.setBudget(4 * 1024);                 // 4 Ko < usage courant
+    QVERIFY2(c.usedBytes() <= 4 * 1024,
+             qPrintable(QStringLiteral("eviction non appliquee : %1 > 4096")
+                            .arg(c.usedBytes())));
+    QVERIFY(c.count() < 20);               // des entrées ont été évincées
+
+    // Augmenter le budget redonne de la place (sans tout re-télécharger).
+    c.setBudget(64 * 1024);
+    QVERIFY(c.usedBytes() <= 64 * 1024);
 }
 
 void TestImageCache::threadedSansCourse()

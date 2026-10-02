@@ -149,6 +149,27 @@ void EcoPanel::buildUi()
     root->addLayout(qrow);
     connect(m_quality, &QSlider::valueChanged, this, &EcoPanel::onSliderMoved);
 
+    // ---- cache d'images (mémoire)
+    auto *crow = new QHBoxLayout;
+    crow->setSpacing(8);
+    auto *clabel = new QLabel(tr("Cache images"), this);
+    clabel->setToolTip(tr("Mémoire réservée aux images compressées. Plus c'est élevé, moins on re-télécharge."));
+    crow->addWidget(clabel);
+    m_cacheSlider = new QSlider(Qt::Horizontal, this);
+    m_cacheSlider->setObjectName(QStringLiteral("cacheSlider"));
+    m_cacheSlider->setRange(16, 128);
+    m_cacheSlider->setSingleStep(16);
+    m_cacheSlider->setValue(32);
+    m_cacheSlider->setToolTip(tr("16–128 Mo de RAM pour les images compressées"));
+    crow->addWidget(m_cacheSlider, 1);
+    m_cacheValue = new QLabel(QStringLiteral("32 Mo"), this);
+    m_cacheValue->setFixedWidth(45);
+    m_cacheValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_cacheValue->setStyleSheet(QStringLiteral("color:#00D4AA;font-weight:600;"));
+    crow->addWidget(m_cacheValue);
+    root->addLayout(crow);
+    connect(m_cacheSlider, &QSlider::valueChanged, this, &EcoPanel::onCacheChanged);
+
     auto *sep2 = new QFrame(this);
     sep2->setObjectName(QStringLiteral("sep"));
     sep2->setFixedHeight(1);
@@ -345,6 +366,22 @@ void EcoPanel::setUltraChecked(bool on)      { if (m_ultra) m_ultra->setChecked(
 void EcoPanel::setFaviconsChecked(bool on)   { if (m_favicons) m_favicons->setChecked(on); }
 void EcoPanel::setSecGpcChecked(bool on)     { if (m_secGpc) m_secGpc->setChecked(on); }
 void EcoPanel::setQualityValue(int v)        { if (m_quality) { m_quality->setValue(v); m_qualityValue->setText(QString::number(v)); } }
+
+void EcoPanel::setCacheValue(int v)
+{
+    if (m_cacheSlider && m_cacheValue) {
+        m_cacheSlider->blockSignals(true);
+        m_cacheSlider->setValue(v);
+        m_cacheSlider->blockSignals(false);
+        m_cacheValue->setText(QStringLiteral("%1 Mo").arg(v));
+    }
+}
+
+void EcoPanel::onCacheChanged(int v)
+{
+    if (m_cacheValue) m_cacheValue->setText(QStringLiteral("%1 Mo").arg(v));
+    emit cacheChanged(v);
+}
 
 void EcoPanel::onSliderMoved(int v)
 {

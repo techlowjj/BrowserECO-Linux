@@ -29,7 +29,7 @@ public:
         QByteArray contentType;
     };
 
-    explicit ImageCache(qint64 budgetBytes = 64LL * 1024 * 1024);
+    explicit ImageCache(qint64 budgetBytes = 32LL * 1024 * 1024);
 
     // Clé canonique : URL + transformation. À utiliser partout, pour ne pas
     // avoir deux endroits qui construisent la clé différemment.
@@ -38,6 +38,11 @@ public:
     bool get(const QString &key, Entry &out);
     void put(const QString &key, const QByteArray &data, const QByteArray &contentType);
     void clear();
+
+    /* Ajuste le budget APRES construction (curseur de l'IHM). Baisser le budget
+     * evict immediatement les entrées les moins récemment utilisées si le coût
+     * total dépasse la nouvelle limite : c'est le comportement voulu. */
+    void setBudget(qint64 budgetBytes);
 
     qint64 budget() const { return m_budget; }
     qint64 usedBytes() const;

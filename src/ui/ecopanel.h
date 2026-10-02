@@ -34,6 +34,7 @@ public:
     void setFaviconsChecked(bool on);
     void setSecGpcChecked(bool on);
     void setQualityValue(int v);
+    void setCacheValue(int v);
 
     // Rafraichit compteurs / etats
     void refresh();
@@ -47,6 +48,7 @@ signals:
     void autoFallbackToggled(bool on);
     void remoteSuggestToggled(bool on);
     void qualityChanged(int value);
+    void cacheChanged(int value);
     void imageStatsResetRequested();
     void engineChanged(const QString &engineId);
     void searxInstanceRequested();
@@ -58,6 +60,7 @@ signals:
 
 private slots:
     void onSliderMoved(int v);
+    void onCacheChanged(int v);
     void emitEngine(int actionId);
 
 private:
@@ -77,6 +80,8 @@ private:
     QToolButton *m_searchBtn = nullptr;
     QSlider *m_quality = nullptr;
     QLabel *m_qualityValue = nullptr;
+    QSlider *m_cacheSlider = nullptr;
+    QLabel *m_cacheValue = nullptr;
     QLabel *m_saved = nullptr;
     QLabel *m_ratio = nullptr;
     QVector<QLabel *> m_catLabels;

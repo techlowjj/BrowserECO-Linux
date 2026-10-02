@@ -27,6 +27,8 @@ struct SettingsData {
     int quality = 65;          // 0-85. 0 = compression des images désactivée.
                                // Source de vérité unique : pas de booléen
                                // séparé, qui finirait par diverger du curseur.
+    int imageCacheMb = 32;     // 16-128. Mémoire du cache d'images compressées.
+                               // Source de vérité unique, comme la qualité.
     double zoom = 1.0;         // 0.25-3.0
     QString engineId;
     QString searxUrl;

@@ -163,6 +163,8 @@ private:
     void showEcoPanelAt(const QPoint &globalPos);
     void chooseSearchEngine(const QString &engineId);
     void applyQuality(int value, bool fromUser);
+    void applyCache(int value, bool fromUser);
+    void onCacheChanged(int value);
     void syncEcoWidgets();
     void updateZoomLabel();
     void updateTabChrome(QWebEngineView *view);
@@ -205,6 +207,7 @@ private:
     // Codec d'images : qualite choisie par l'utilisateur (0 = pas de
     // compression). Utilise par le gestionnaire d'images (schema perso).
     int m_quality = 65;
+    int m_imageCacheMb = 32;
     EcoInterceptor *m_interceptor = nullptr;
     EcoImageServer *m_imageServer = nullptr;
     QWebEngineProfile *m_profile = nullptr;

@@ -118,7 +118,7 @@ MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode
     if (m_isPrivate) {
         m_profile = new QWebEngineProfile(this);   // profil hors disque
         m_profile->setHttpCacheType(QWebEngineProfile::MemoryHttpCache);
-        m_profile->setHttpCacheMaximumSize(20 * 1024 * 1024);
+        m_profile->setHttpCacheMaximumSize(16 * 1024 * 1024);
         // Politique de permissions persistantes (geolocalisation, camera...) :
         // API Qt 6.8. En dessous, le profil etant deja hors disque et le
         // stockage des permissions suivant le profil, cette ligne n'apporte
@@ -133,7 +133,7 @@ MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode
             QDir(settingsDir).filePath(QStringLiteral("WebEngineProfile")));
         m_profile->setPersistentCookiesPolicy(QWebEngineProfile::ForcePersistentCookies);
         m_profile->setHttpCacheType(QWebEngineProfile::DiskHttpCache);
-        m_profile->setHttpCacheMaximumSize(100 * 1024 * 1024);
+        m_profile->setHttpCacheMaximumSize(50 * 1024 * 1024);
     }
 
     // Services : les bases suivent le dossier de profil (--data-dir), sinon
@@ -165,8 +165,10 @@ MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode
     // Serveur d'images local : c'est lui qui sert les images compressées.
     // Il doit tourner AVANT l'intercepteur, qui a besoin de son adresse.
     m_imageServer = new EcoImageServer(this);
-    if (m_imageServer->start())
+    if (m_imageServer->start()) {
         connect(m_imageServer, &EcoImageServer::imageServed, this, &MainWindow::updateStats);
+        applyCache(m_imageCacheMb, false);   // avant tout chargement : branche l'état
+    }
 
     m_interceptor = new EcoInterceptor(&m_adblocker, this);
     m_profile->setUrlRequestInterceptor(m_interceptor);
@@ -1067,6 +1069,28 @@ void MainWindow::applyQuality(int value, bool fromUser)
     }
 }
 
+void MainWindow::onCacheChanged(int value)
+{
+    applyCache(value, true);
+}
+
+void MainWindow::applyCache(int value, bool fromUser)
+{
+    value = qBound(16, value, 128);
+    if (fromUser) m_imageCacheMb = value;
+    // Le curseur regle la memoire du cache d'images : plus elle est grande, moins
+    // on re-telecharge. Baisser le budget evict immediatement les images les moins
+    // récentes (LRU) : c'est le comportement voulu.
+    if (m_imageServer && m_imageServer->isRunning())
+        m_imageServer->setCacheBudget(qint64(value) * 1024 * 1024);
+    if (m_ecoPanel) m_ecoPanel->refresh();
+    if (fromUser) {
+        scheduleSaveSettings();   // un cran de curseur = une ecriture groupee
+        updateStats();
+        setStatus(tr("Cache images : %1 Mo").arg(value), 2500);
+    }
+}
+
 void MainWindow::syncEcoWidgets()
 {
     if (m_ecoPanel) {
@@ -1076,6 +1100,7 @@ void MainWindow::syncEcoWidgets()
         m_ecoPanel->setFaviconsChecked(m_favicons);
         m_ecoPanel->setSecGpcChecked(m_secGpc);
         m_ecoPanel->setQualityValue(m_quality);
+        m_ecoPanel->setCacheValue(m_imageCacheMb);
         m_ecoPanel->refresh();
     }
     m_privacyBtn->setChecked(m_dataSaver || m_ultraEco);
@@ -1101,6 +1126,7 @@ void MainWindow::showEcoPanelAt(const QPoint &globalPos)
         m_ecoPanel->setImageServer(m_imageServer);
         connect(m_ecoPanel, &EcoPanel::imageStatsResetRequested,
                 this, [this]{ if (m_imageServer) m_imageServer->resetStats(); });
+        connect(m_ecoPanel, &EcoPanel::cacheChanged, this, &MainWindow::onCacheChanged);
         m_ecoPanel->setSearchManager(m_search);
         connect(m_ecoPanel, &EcoPanel::dataSaverToggled, this, &MainWindow::toggleDataSaver);
         connect(m_ecoPanel, &EcoPanel::imagesToggled, this, &MainWindow::toggleImagesOff);
@@ -2054,6 +2080,7 @@ void MainWindow::loadSettings() {
     m_zoom = d.zoom;
 
     m_quality = ImageCodec::clampQuality(d.quality);
+    m_imageCacheMb = qBound(16, d.imageCacheMb, 128);
     if (m_ecoPanel) m_ecoPanel->setQualityValue(d.quality);
     m_omni->refreshEngineBadge();
     syncEcoWidgets();
@@ -2069,6 +2096,7 @@ void MainWindow::saveSettings() {
     d.ultraEco = m_ultraEco;
     d.favicons = m_favicons;
     d.quality = m_quality;
+    d.imageCacheMb = m_imageCacheMb;
     d.zoom = m_zoom;
     d.engineId = m_search->engineId();
     d.searxUrl = m_search->searxUrl();

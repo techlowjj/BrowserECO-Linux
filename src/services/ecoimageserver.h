@@ -66,6 +66,9 @@ public:
      * monitoring (et de test) : il prouve que le plafond est respecté. */
     int maxSimultaneousFetches() const { return m_maxEnV.load(); }
 
+    /* Ajuste le budget mémoire du cache d'images (curseur de l'IHM). */
+    void setCacheBudget(qint64 bytes) { m_cache.setBudget(bytes); }
+
     /* Remet les compteurs à zéro, SANS vider le cache réseau : l'utilisateur
      * veut repartir de zéro dans l'affichage, pas retélécharger des images déjà
      * en cache (cela gaspillerait de la bande passante). Vide aussi la file

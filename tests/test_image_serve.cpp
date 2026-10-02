@@ -22,6 +22,7 @@
 #include <QTcpSocket>
 #include <QTabWidget>
 #include <QRandomGenerator>
+#include <QSlider>
 #include <QTemporaryDir>
 #include <QWebEngineView>
 
@@ -393,6 +394,11 @@ void TestImageServe::panneauAfficheLaMesureReelle()
     // octets téléchargés, et au moins une image compressée.
     auto *panneau = m_win->ecoPanel();
     QVERIFY(panneau);
+    // Le curseur « Cache images » doit exister et etre bien borne (16-128).
+    auto *curseur = panneau->findChild<QSlider *>(QStringLiteral("cacheSlider"));
+    QVERIFY(curseur);
+    QCOMPARE(curseur->minimum(), 16);
+    QCOMPARE(curseur->maximum(), 128);
     panneau->refresh();
     const QList<QLabel *> labels = panneau->findChildren<QLabel *>();
     QString tout;

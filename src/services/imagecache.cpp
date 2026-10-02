@@ -43,6 +43,14 @@ void ImageCache::put(const QString &key, const QByteArray &data, const QByteArra
     m_cache.insert(key, e, qsizetype(e->data.size()));
 }
 
+void ImageCache::setBudget(qint64 budgetBytes)
+{
+    QMutexLocker lock(&m_mutex);
+    const qint64 borne = budgetBytes < 1024 ? 1024 : budgetBytes;
+    m_cache.setMaxCost(static_cast<int>(borne));
+    m_budget = borne;
+}
+
 void ImageCache::clear()
 {
     QMutexLocker lock(&m_mutex);
