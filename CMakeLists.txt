@@ -63,6 +63,9 @@ set(CORE_SOURCES
     src/services/ecoimageurl.h
     src/services/ecoimageserver.cpp
     src/services/ecoimageserver.h
+    src/services/ecolazyurl.cpp
+    src/services/ecolazyurl.h
+    resources/resources.qrc          # script de chargement d'images a la demande
     src/services/searchengine.cpp
     src/services/searchengine.h
     src/services/serpguard.cpp

@@ -330,7 +330,7 @@ pour ceux qui démarrent QtWebEngine) et s'exécute dans son propre dossier vide
 recréé à chaque exécution — aucun test ne peut voir un `settings.txt`, une base
 ou un profil réel, ni les réglages laissés par un autre test.
 
-**17 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
+**18 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
 
 | Suite | Couverture |
 |---|---|
@@ -344,6 +344,7 @@ ou un profil réel, ni les réglages laissés par un autre test.
 | `test_images` | exceptions d'images par site : frontières de label, sous-domaines, faux positifs (`notexample.com`), persistance, idempotence |
 | `test_imagecache` | cache LRU borné en **octets** (et non en entrées), clé incluant la transformation, compteurs, 4 threads en parallèle |
 | `test_ecoimageurl` | URL signées du serveur local : aller-retour, URL > 400 caractères, et **tentatives de forge** (signature absente/falsifiée, charge utile remplacée, w/q altérés, mauvais port) |
+| `test_lazy_images` | **chargement a la demande** : zero requete avant clic, une seule apres, marqueur `_eco` absent du CDN, compteur exact, page sans image intacte |
 | `test_image_serve` | **bout en bout** : vrai navigateur + vrai serveur HTTP. Image 1800 px reçue en 1600 px, une seule requête réseau, octets servis < téléchargés, compression off = inchangé, image 404 = page intacte, rechargement bien recompressé |
 | `test_imagecodec` | politique de compression **seule** (aucun réseau) : refus (seuil, qualité 0, GIF/SVG, données illisibles), redimensionnement (plafond, jamais d'agrandissement, aspect), choix de format, et l'invariant **« compressé ⇒ plus léger »** vérifié sur 120 combinaisons |
 | `test_headers` | **serveur HTTP local qui lit les en-têtes reçus** : `Sec-GPC` et `Save-Data` partent vraiment, se coupent vraiment, restent indépendants (page *et* images) |
@@ -428,7 +429,7 @@ BrowserECO-Linux/
 │       ├── omnibox.{h,cpp}         ← barre d'adresse + suggestions
 │       ├── ecopanel.{h,cpp}        ← panneau Data saver
 │       └── icons.{h,cpp}           ← icônes vectorielles (QPainter)
-├── tests/                          ← 17 tests + CMakeLists.txt (CTest)
+├── tests/                          ← 18 tests + CMakeLists.txt (CTest)
 ├── Filters/                        ← EasyList + EasyPrivacy (~116 000 règles)
 │   ├── update.sh                   ← téléchargement des listes (non versionnées)
 │   ├── LICENSE                     ← attribution obligatoire
@@ -528,6 +529,28 @@ cpack --config build-deb/CPackConfig.cmake -G DEB
   [`Filters/README.md`](Filters/README.md). Elles ne sont pas incluses dans le
   dépôt (3,5 Mo) ; sans elles l'application démarre et l'indique
   (« Filtres : 0 »).
+
+## Chargement d'images à la demande (active)
+
+Interrupteur **« Images à la demande »** dans le panneau Eco : les images sont
+**bloquées au niveau réseau**, remplacées visuellement par une bordure
+pointillée, et un clic ne charge que celle-là.
+
+| Décision | Pourquoi |
+|---|---|
+| **Blocage dans l'intercepteur, pas en JS** | Un script DOM arrive **trop tard** pour les images du HTML initial : le parseur a déjà lancé les requêtes. L'intercepteur est synchrone, donc jamais raté. |
+| **`AutoLoadImages` n'est PAS coupé** | Mesuré : avec ce réglage off, Chromium refuse **tout** chargement d'image déclenché par script (restaurer `src` puis `decode()` ne charge rien), et un clic ne recharge pas une image dont la `src` a été remplacée. C'est un impasse. |
+| **Marqueur `_eco=1` à la demande** | Le script ne peut pas parler à l'intercepteur autrement qu'en changeant l'URL. L'intercepteur retire le marqueur **avant** toute requête sortante : **le CDN d'origine ne le voit jamais** (testé). |
+| **URLs chargées mémorisées** | Sans cela, recharger la page rebloquerait des images que l'utilisateur avait explicitement demandées. Plafonnées à 2048 entrées. |
+| **Script en monde applicatif** | La page ne peut ni voir le script ni le désactiver (un site hostile ne doit pas pouvoir forcer le chargement). |
+
+**Ce qui n'est pas couvert** (hors périmètre, documenté) : `srcset` / `<picture>`,
+images en CSS `background-image`, et tout ce qui n'est pas une balise `<img>`.
+
+`test_lazy_images` le prouve dans un vrai navigateur : **zéro requête** vers le
+serveur d'origine tant que l'utilisateur n'a pas cliqué, une seule requête après
+clic, marqueur absent du CDN, compteur exact, page sans image intacte, réglage
+désactivé = chargement normal.
 
 ## Compression des images (active)
 

@@ -82,12 +82,23 @@ public:
     }
     bool imageCompression() const { return m_compressImages; }
 
+    /* Chargement d'images a la demande : les images sont BLOQUEES au niveau
+     * reseau (et non desactivees par QWebEngineSettings, voir le script), puis
+     * liberees au clic. Le blocage ici est synchrone : impossible de le rater,
+     * alors qu'un script DOM arrive trop tard pour les images du HTML initial.
+     * L'URL liberee porte un marqueur que l'intercepteur retire ensuite. */
+    void setLazyImages(bool on) { m_lazyImages = on; }
+    bool lazyImages() const { return m_lazyImages; }
+    int deferredImageCount() const { return m_deferredCount; }
+
     /* Règle de réécriture, extraite pour être TESTÉE seule : c'est la barrière
      * qui empêche la boucle. Sans elle, l'URL de notre serveur local (qui est
      * aussi en http) se réécrivait à l'infini — mesuré à 99 itérations en un
      * chargement de page, l'image n'arrivant jamais. */
     bool wouldRewriteImage(const QUrl &url,
                            QWebEngineUrlRequestInfo::ResourceType type) const;
+    bool isActivated(const QString &url) const;
+    void markActivated(const QString &url);
     void setUltraEcoEnabled(bool e) { m_ultraEco = e; }
     // Sec-GPC ("Global Privacy Control") : le signal normalise qui demande aux
     // sites de limiter les donnees. 1 octet par requete, aucune contrepartie
@@ -158,6 +169,10 @@ public:
     int savedRatio() const;
 
 signals:
+    /* Nombre d'images mises en attente (panneau Eco). */
+    void deferredImage(int total);
+
+signals:
     void statsChanged(qint64 blocked);
 
 private:
@@ -171,6 +186,13 @@ private:
     bool m_dataSaver = true;
     bool m_imagesOff = true;
     bool m_compressImages = false;
+    bool m_lazyImages = false;
+    // URLs que l'utilisateur a explicitement chargees (clic). Borne pour ne pas
+    // grossir sans fin ; sans cela, recharger la page rebloquerait des images que
+    // l'utilisateur avait deja demandees.
+    static constexpr int kMaxActivatedImages = 2048;
+    QStringList m_activatedImages;   // formes encodees des URL voulues
+    int m_deferredCount = 0;
     QUrl m_imageServer;                // racine du serveur d'images local
     int m_imageQuality = ImageCodec::kDefaultQuality;
     bool m_secGpc = true;

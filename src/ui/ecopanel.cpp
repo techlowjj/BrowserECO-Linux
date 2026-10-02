@@ -99,6 +99,15 @@ void EcoPanel::buildUi()
     root->addWidget(m_images);
     connect(m_images, &QToolButton::toggled, this, &EcoPanel::imagesToggled);
 
+    // ---- images a la demande (placeholder cliquable)
+    m_lazyImages = makeToggle(tr("Images à la demande (cliquer pour charger)"),
+                              tr("Les images sont remplacées par des placeholders ; un clic charge "
+                                 "l'image réelle. Sans effet si les images sont bloquées."),
+                              Icons::download(), this);
+    m_lazyImages->setObjectName(QStringLiteral("ecoToggle"));
+    root->addWidget(m_lazyImages);
+    connect(m_lazyImages, &QToolButton::toggled, this, &EcoPanel::lazyImagesToggled);
+
     // ---- ultra
     m_ultra = makeToggle(tr("Mode Ultra  (vidéo + streaming bloqués)"),
                          tr("Coupe YouTube/streaming, favicons et chunks média. 480 px / qualité 50 forcés"),
@@ -362,6 +371,7 @@ void EcoPanel::setSearchManager(SearchEngineManager *s) { m_search = s; }
 
 void EcoPanel::setDataSaverChecked(bool on) { if (m_dataSaver) m_dataSaver->setChecked(on); }
 void EcoPanel::setImagesChecked(bool on)     { if (m_images) m_images->setChecked(on); }
+void EcoPanel::setLazyImagesChecked(bool on) { if (m_lazyImages) m_lazyImages->setChecked(on); }
 void EcoPanel::setUltraChecked(bool on)      { if (m_ultra) m_ultra->setChecked(on); }
 void EcoPanel::setFaviconsChecked(bool on)   { if (m_favicons) m_favicons->setChecked(on); }
 void EcoPanel::setSecGpcChecked(bool on)     { if (m_secGpc) m_secGpc->setChecked(on); }

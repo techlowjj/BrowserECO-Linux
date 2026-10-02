@@ -164,6 +164,11 @@ MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode
 
     // Serveur d'images local : c'est lui qui sert les images compressées.
     // Il doit tourner AVANT l'intercepteur, qui a besoin de son adresse.
+    // Script de chargement d'images a la demande : enregistre sur le profil, il
+    // s'execute a la creation de CHAQUE document (y compris les rechargements et
+    // les nouvelles fenetres), avant que le parseur ne demande les images.
+    BrowserPage::installLazyImageScript(m_profile);
+
     m_imageServer = new EcoImageServer(this);
     if (m_imageServer->start()) {
         connect(m_imageServer, &EcoImageServer::imageServed, this, &MainWindow::updateStats);
@@ -869,9 +874,29 @@ void MainWindow::onUrlChanged(const QUrl &url) {
     updateStats();
 }
 
+/* Bascule « images a la demande ». Le chemin VRAI de l'application : le meme
+ * que celui du bouton du panneau Eco (meme effet, une seule implementation). */
+void MainWindow::toggleLazyImages(bool on)
+{
+    m_lazyImages = on;
+    // C'est l'INTERCEPTEUR qui bloque les images : c'est le seul endroit
+    // synchrone, donc le seul qui ne rate pas les images du HTML initial.
+    // Le script DOM ne fait que l'apparence et le clic.
+    if (m_interceptor) m_interceptor->setLazyImages(on);
+    // « Images bloquees » reste prioritaire : inutile de bloquer les images si elles
+    // sont deja bloquees.
+    if (m_interceptor && m_imagesOff) m_interceptor->setLazyImages(false);
+    syncEcoWidgets();
+    scheduleSaveSettings();
+}
+
 void MainWindow::onLoadFinished(bool ok) {
     auto v = qobject_cast<QWebEngineView *>(sender());
     if (v == currentView()) m_progress->hide();
+    // Chargement d'images a la demande : rien a injecter ici. Le script est
+    // enregistre sur le PROFIL (BrowserPage::installLazyImageScript) et s'execute
+    // a la creation de chaque document, donc avant que le parseur ne demande
+    // les images du HTML initial. Inutile (et raté) de le lancer apres coup.
     updateNavigationActions();
     refreshStatusLine();   // l'historique vient de changer
     updateStats();
@@ -1096,6 +1121,7 @@ void MainWindow::syncEcoWidgets()
     if (m_ecoPanel) {
         m_ecoPanel->setDataSaverChecked(m_dataSaver);
         m_ecoPanel->setImagesChecked(m_imagesOff);
+        m_ecoPanel->setLazyImagesChecked(m_lazyImages);
         m_ecoPanel->setUltraChecked(m_ultraEco);
         m_ecoPanel->setFaviconsChecked(m_favicons);
         m_ecoPanel->setSecGpcChecked(m_secGpc);
@@ -1127,6 +1153,11 @@ void MainWindow::showEcoPanelAt(const QPoint &globalPos)
         connect(m_ecoPanel, &EcoPanel::imageStatsResetRequested,
                 this, [this]{ if (m_imageServer) m_imageServer->resetStats(); });
         connect(m_ecoPanel, &EcoPanel::cacheChanged, this, &MainWindow::onCacheChanged);
+        connect(m_ecoPanel, &EcoPanel::lazyImagesToggled, this, [this](bool on) {
+            toggleLazyImages(on);       // un seul chemin d'application
+            setStatus(on ? tr("Images à la demande : cliquez pour charger")
+                         : tr("Images à la demande désactivée"), 3000);
+        });
         m_ecoPanel->setSearchManager(m_search);
         connect(m_ecoPanel, &EcoPanel::dataSaverToggled, this, &MainWindow::toggleDataSaver);
         connect(m_ecoPanel, &EcoPanel::imagesToggled, this, &MainWindow::toggleImagesOff);
@@ -1880,6 +1911,13 @@ void MainWindow::applyWebSettings() {
     s->setAttribute(QWebEngineSettings::JavascriptEnabled, true);
     s->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, true);
     s->setAttribute(QWebEngineSettings::JavascriptCanAccessClipboard, true);
+    // AutoLoadImages reste piloté par le SEUL reglage « Images bloquees ».
+    // On ne le coupe PAS pour le chargement a la demande : avec
+    // AutoLoadImages=false, Chromium refuse TOUT chargement d'image declenche
+    // par script (mesuré : restaurer src puis appeler decode() ne charge rien),
+    // et meme un vrai clic ne recharge pas l'image dont on a remplace la src.
+    // Le report est donc fait par le script, AVANT que le parseur ne fasse les
+    // requetes (voir BrowserPage::installLazyImageScript).
     s->setAttribute(QWebEngineSettings::AutoLoadImages, !m_imagesOff);
     s->setAttribute(QWebEngineSettings::PluginsEnabled, false);
     s->setAttribute(QWebEngineSettings::DnsPrefetchEnabled, false);
@@ -2081,6 +2119,8 @@ void MainWindow::loadSettings() {
 
     m_quality = ImageCodec::clampQuality(d.quality);
     m_imageCacheMb = qBound(16, d.imageCacheMb, 128);
+    m_lazyImages = d.lazyImages;
+    applyWebSettings();          // le reglage change le comportement des images
     if (m_ecoPanel) m_ecoPanel->setQualityValue(d.quality);
     m_omni->refreshEngineBadge();
     syncEcoWidgets();
@@ -2097,6 +2137,7 @@ void MainWindow::saveSettings() {
     d.favicons = m_favicons;
     d.quality = m_quality;
     d.imageCacheMb = m_imageCacheMb;
+    d.lazyImages = m_lazyImages;
     d.zoom = m_zoom;
     d.engineId = m_search->engineId();
     d.searxUrl = m_search->searxUrl();

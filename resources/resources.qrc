@@ -1,0 +1,12 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <!--
+        Le script de chargement d'images a la demande est EMBARQUE dans le
+        binaire : il fonctionne donc aussi dans le paquet .deb, ou un fichier
+        place a cote du binaire serait plus fragile (chemin relatif, prefixe
+        d'installation).
+    -->
+    <qresource prefix="/">
+        <file>lazyload.js</file>
+    </qresource>
+</RCC>

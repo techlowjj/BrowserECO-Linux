@@ -1,5 +1,6 @@
 #include "ecointerceptor.h"
 #include "services/ecoimageurl.h"
+#include "services/ecolazyurl.h"
 #include <QUrl>
 #include <QDebug>
 #include <QRegularExpression>
@@ -62,6 +63,19 @@ int EcoInterceptor::imageAllowedCount() const
 {
     QReadLocker lock(&m_imageLock);
     return int(m_imageAllowed.size());
+}
+
+bool EcoInterceptor::isActivated(const QString &url) const
+{
+    return m_activatedImages.contains(url);
+}
+
+void EcoInterceptor::markActivated(const QString &url)
+{
+    // On memorise l'URL PROPRE (celle du script, sans marqueur) : c'est elle que
+    // le navigateur redemandera au rechargement, et elle doit donc etre reconnue.
+    if (m_activatedImages.size() >= kMaxActivatedImages) m_activatedImages.removeFirst();
+    if (!m_activatedImages.contains(url)) m_activatedImages.append(url);
 }
 
 bool EcoInterceptor::wouldRewriteImage(
@@ -294,7 +308,36 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
         noteBlock(EcoCategory::Images);
         return;
     }
-    // 4. Compression des images : on renvoie l'image vers notre serveur local,
+    // 4. Chargement d'images a la demande. AVANT la compression : on decide
+    //    d'abord si l'image a le droit d'etre telechargee.
+    // Notre propre serveur d'images ne doit jamais etre reporte : il ne sert que
+    // des images que l'utilisateur a deja demandees.
+    const bool versNotreServeur = m_imageServer.isValid()
+                                  && url.scheme().compare(m_imageServer.scheme(), Qt::CaseInsensitive) == 0
+                                  && url.host() == m_imageServer.host()
+                                  && (url.port(-1) < 0 || url.port(-1) == m_imageServer.port(-1));
+
+    if (m_lazyImages && !versNotreServeur
+        && type == QWebEngineUrlRequestInfo::ResourceTypeImage) {
+        QUrl propre;
+        // Marqueur pose par le script au clic : on retire le marqueur, on
+        // memorise l'URL comme voulue par l'utilisateur, et on laisse passer.
+        if (EcoLazyUrl::removeMarker(url, &propre)) {
+            markActivated(propre.toEncoded());   // URL propre : reconnue au rechargement
+            info.redirect(propre);
+            return;
+        }
+        // Image non marquee et non encore voulue : on bloque. C'est ici que se
+        // fait la economie de bande passante (synchrone, donc fiable).
+        if (!isActivated(url.toEncoded())) {
+            ++m_deferredCount;
+            emit deferredImage(m_deferredCount);
+            info.block(true);
+            return;
+        }
+    }
+
+    // 5. Compression des images : on renvoie l'image vers notre serveur local,
     // qui la sert compressée (WebP/JPEG, redimensionnée). Trois gardes :
     //   - réglage désactivé ou serveur arrêté -> rien ;
     //   - l'URL doit être encodable (http/https), sinon on ne touche à rien ;

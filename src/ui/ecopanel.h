@@ -30,6 +30,7 @@ public:
     // Synchronise l'etat des bascules avec l'etat reel
     void setDataSaverChecked(bool on);
     void setImagesChecked(bool on);
+    void setLazyImagesChecked(bool on);
     void setUltraChecked(bool on);
     void setFaviconsChecked(bool on);
     void setSecGpcChecked(bool on);
@@ -42,6 +43,7 @@ public:
 signals:
     void dataSaverToggled(bool on);
     void imagesToggled(bool on);
+    void lazyImagesToggled(bool on);
     void ultraToggled(bool on);
     void faviconsToggled(bool on);
     void secGpcToggled(bool on);
@@ -72,6 +74,7 @@ private:
 
     QToolButton *m_dataSaver = nullptr;
     QToolButton *m_images = nullptr;
+    QToolButton *m_lazyImages = nullptr;
     QToolButton *m_ultra = nullptr;
     QToolButton *m_favicons = nullptr;
     QToolButton *m_secGpc = nullptr;

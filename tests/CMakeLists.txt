@@ -21,6 +21,7 @@ set(_unit_tests
 )
 set(_gui_tests
     test_headers
+    test_lazy_images
     test_image_serve
     serp_test
     freeze_test

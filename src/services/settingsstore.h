@@ -24,6 +24,10 @@ struct SettingsData {
     bool imagesOff = true;
     bool ultraEco = false;
     bool favicons = true;
+    // Chargement d'images a la demande : placeholder cliquable au lieu de
+    // telecharger chaque image. OFF par defaut (c'est un choix, pas une
+    // surprise) et sans effet si « Images » est deja bloquees.
+    bool lazyImages = false;
     int quality = 65;          // 0-85. 0 = compression des images désactivée.
                                // Source de vérité unique : pas de booléen
                                // séparé, qui finirait par diverger du curseur.

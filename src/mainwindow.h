@@ -111,6 +111,7 @@ private slots:
     void onLoadProgress(int progress);
     void toggleDataSaver(bool checked);
     void toggleImagesOff(bool checked);
+    void toggleLazyImages(bool on);
     void toggleUltraEco(bool checked);
     void toggleSecGpc(bool checked);
     void onQualityChanged(int value);
@@ -221,6 +222,7 @@ private:
     QVector<ShortcutRow> m_ecoShortcuts;
     bool m_dataSaver = true;
     bool m_imagesOff = true;
+    bool m_lazyImages = false;
     bool m_ultraEco = false;
     bool m_favicons = true;
     bool m_secGpc = true;
