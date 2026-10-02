@@ -82,7 +82,7 @@ constexpr int kMaxSessionTabs = 12;
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode)
-    : QMainWindow(parent), m_imageOptimizer(10000, 600, 65)
+    : QMainWindow(parent)
 {
     // Dossier de reglages : --data-dir / BROWSERECO_DATA_DIR > dossier du binaire
     // si inscriptible > ~/.local/share/BrowserECO (portabilite conservee).
@@ -1042,10 +1042,11 @@ void MainWindow::onQualityChanged(int value) {
 
 void MainWindow::applyQuality(int value, bool fromUser)
 {
-    value = qBound(0, value, 85);
+    value = ImageCodec::clampQuality(value);
     if (fromUser) m_quality = value;
-    const int effective = m_ultraEco ? qMin(value, 50) : value;
-    m_imageOptimizer.setQuality(effective == 0 ? 85 : effective);  // 0 = pas d'optimisation
+    // La compression elle-meme n'est pas encore branchee (palier B : gestionnaire
+    // d'images sur schema perso). Ce reglage est desormais borne par le codec
+    // lui-meme plutot que par un qBound duplique, et il sera consomme tel quel.
     if (m_ecoPanel) m_ecoPanel->refresh();
     if (fromUser) {
         scheduleSaveSettings();   // un cran de curseur = une ecriture groupee
@@ -2036,8 +2037,7 @@ void MainWindow::loadSettings() {
     m_interceptor->setSecGpcEnabled(m_secGpc);
     m_zoom = d.zoom;
 
-    m_quality = d.quality;
-    m_imageOptimizer.setQuality(m_ultraEco ? qMin(d.quality, 50) : d.quality);
+    m_quality = ImageCodec::clampQuality(d.quality);
     if (m_ecoPanel) m_ecoPanel->setQualityValue(d.quality);
     m_omni->refreshEngineBadge();
     syncEcoWidgets();

@@ -55,8 +55,8 @@ set(CORE_SOURCES
     src/services/cachemanager.h
     src/services/historymanager.cpp
     src/services/historymanager.h
-    src/services/imageoptimizer.cpp
-    src/services/imageoptimizer.h
+    src/services/imagecodec.cpp
+    src/services/imagecodec.h
     src/services/searchengine.cpp
     src/services/searchengine.h
     src/services/serpguard.cpp

@@ -330,7 +330,7 @@ pour ceux qui démarrent QtWebEngine) et s'exécute dans son propre dossier vide
 recréé à chaque exécution — aucun test ne peut voir un `settings.txt`, une base
 ou un profil réel, ni les réglages laissés par un autre test.
 
-**13 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
+**14 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
 
 | Suite | Couverture |
 |---|---|
@@ -342,6 +342,7 @@ ou un profil réel, ni les réglages laissés par un autre test.
 | `test_icons` | chaque icône dessine bien des pixels |
 | `test_eco_stats` | cohérence et bornage des compteurs d'économie |
 | `test_images` | exceptions d'images par site : frontières de label, sous-domaines, faux positifs (`notexample.com`), persistance, idempotence |
+| `test_imagecodec` | politique de compression **seule** (aucun réseau) : refus (seuil, qualité 0, GIF/SVG, données illisibles), redimensionnement (plafond, jamais d'agrandissement, aspect), choix de format, et l'invariant **« compressé ⇒ plus léger »** vérifié sur 120 combinaisons |
 | `test_headers` | **serveur HTTP local qui lit les en-têtes reçus** : `Sec-GPC` et `Save-Data` partent vraiment, se coupent vraiment, restent indépendants (page *et* images) |
 | `serp_test` | repli anti-challenge, détection de mur, exemption d'images sur les pages de vérification. **2 cas font de vraies requêtes réseau** : ignorés sauf si `BROWSERECO_NET_TESTS=1` (un runner CI, en adresse cloud, reçoit un mur anti-bot différent et rendrait le test instable) |
 | `freeze_test` | anti-gel : Menu → Téléchargements, thread témoin |
@@ -416,12 +417,12 @@ BrowserECO-Linux/
 │   │   ├── adblocker.{h,cpp}
 │   │   ├── cachemanager.{h,cpp}
 │   │   ├── historymanager.{h,cpp}
-│   │   └── imageoptimizer.{h,cpp}
+│   │   └── imagecodec.{h,cpp}         ← politique de compression (testée seule)
 │   └── ui/
 │       ├── omnibox.{h,cpp}         ← barre d'adresse + suggestions
 │       ├── ecopanel.{h,cpp}        ← panneau Data saver
 │       └── icons.{h,cpp}           ← icônes vectorielles (QPainter)
-├── tests/                          ← 13 tests + CMakeLists.txt (CTest)
+├── tests/                          ← 14 tests + CMakeLists.txt (CTest)
 ├── Filters/                        ← EasyList + EasyPrivacy (~116 000 règles)
 │   ├── update.sh                   ← téléchargement des listes (non versionnées)
 │   ├── LICENSE                     ← attribution obligatoire
@@ -524,7 +525,16 @@ cpack --config build-deb/CPackConfig.cmake -G DEB
 
 ## Limite connue
 
-Le curseur « qualité des images » enregistre le réglage `quality=` mais la
-compression WebP n'est pas encore branchée : `ImageOptimizer` n'a pas de
-`QWebEngineUrlSchemeHandler` qui l'appellerait. Le réglage est donc pour l'instant
-sans effet sur le trafic : c'est la seule fonction annoncée qui ne fait rien.
+Le curseur « qualité des images » enregistre le réglage `quality=` et la **décision
+de compression est implémentée et testée** (`ImageCodec`, 17 assertions : refus,
+plafond de largeur, aspect, format, et l'invariant « compressé ⇒ plus léger »),
+mais **rien ne l'appelle encore** : il manque le gestionnaire qui sert les images
+compressées (schéma personnalisé), planned pour la phase P4 du palier B. Le
+réglage est donc encore sans effet sur le trafic : c'est la seule fonction annoncée
+qui ne fait rien.
+
+Détail important découvert en mesurant : cette installation de Qt **n'a pas
+d'encodeur WebP** (`QImageWriter` ne propose que png/jpeg/bmp/ico/xpm) ; le
+codec bascule donc automatiquement en JPEG, et le gain relatif mesuré est
+alors de −41 % à −76 % au lieu de −52 % à −80 %. Le panneau Eco indiquera le
+format réellement utilisé.

@@ -8,6 +8,7 @@
 
 set(_unit_tests
     test_adblock
+    test_imagecodec
     test_images
     test_searchengine
     test_settings

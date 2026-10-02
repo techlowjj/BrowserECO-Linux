@@ -24,7 +24,7 @@
 #include "services/adblocker.h"
 #include "services/cachemanager.h"
 #include "services/historymanager.h"
-#include "services/imageoptimizer.h"
+#include "services/imagecodec.h"
 #include "services/searchengine.h"
 #include "services/serpguard.h"
 
@@ -193,7 +193,9 @@ private:
     AdBlocker m_adblocker;
     CacheManager *m_cache = nullptr;
     HistoryManager *m_history = nullptr;
-    ImageOptimizer m_imageOptimizer;
+    // Codec d'images : qualite choisie par l'utilisateur (0 = pas de
+    // compression). Utilise par le gestionnaire d'images (schema perso).
+    int m_quality = 65;
     EcoInterceptor *m_interceptor = nullptr;
     QWebEngineProfile *m_profile = nullptr;
     SearchEngineManager *m_search = nullptr;
@@ -207,9 +209,6 @@ private:
     bool m_dataSaver = true;
     bool m_imagesOff = true;
     bool m_ultraEco = false;
-    // Qualite choisie par l'utilisateur (0-85). Distincte de la qualite
-    // EFFECTIVE : le mode Ultra la plafonne a 50 sans ecraser le reglage.
-    int m_quality = 65;
     bool m_favicons = true;
     bool m_secGpc = true;
     bool m_isPrivate = false;
