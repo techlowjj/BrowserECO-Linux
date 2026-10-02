@@ -1,0 +1,10 @@
+4f3cbcb2427b01fa891667b84a474a6e  usr/Filters/LICENSE
+4890255fa118a43110bf5332e0ca2c1c  usr/Filters/README.md
+24a1aed874cbe23926337bc73be211cd  usr/Filters/easylist.txt
+3c08eeb215bcf8e49255401e6e70cdb9  usr/Filters/easyprivacy.txt
+735aa1eaebfc136009e31ea0183f7f51  usr/Filters/filters.txt
+0d40af349eabc0c83d95b1fea4c26071  usr/Filters/update.sh
+21f0ececc339d2846f41e495e0ad5d18  usr/bin/BrowserECO
+56789d555b75bff878be6aa950389a39  usr/share/applications/BrowserECO.desktop
+ff740baed291ec435e7a72d63d5a822a  usr/share/icons/hicolor/512x512/apps/browser-eco.png
+7eb95bb942ea3d6b529759151726c114  usr/share/metainfo/browser-eco.appdata.xml

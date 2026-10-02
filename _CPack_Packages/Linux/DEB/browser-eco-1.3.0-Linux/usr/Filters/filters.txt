@@ -1,0 +1,99 @@
+# ===== Filtres DataSaver Browser =====
+# Combiné : EasyList + EasyPrivacy + filtres personnalisés
+# Sources officielles (à jour) :
+#   easylist.txt  : https://easylist.to/easylist/easylist.txt
+#   easyprivacy.txt : https://easylist.to/easylist/easyprivacy.txt
+
+# ===== PUBLICITÉS (广告) =====
+doubleclick.net
+googlesyndication.com
+googleadservices.com
+adservice.google.com
+outbrain.com
+taboola.com
+criteo.com
+amazon-adsystem.com
+adsrvr.org
+pubmatic.com
+rubiconproject.com
+openx.net
+appnexus.com
+moPub.com
+media.net
+yieldmo.com
+zedo.com
+2mdn.net
+adnxs.com
+spotxchange.com
+spotx.tv
+adform.net
+advertising.com
+serving-sys.com
+smaato.net
+inmobi.com
+unity3d.com/ads
+facebook.com/tr
+facebook.net
+
+# ===== TRACKING / ANALYTICS =====
+google-analytics.com
+googletagmanager.com
+hotjar.com
+mixpanel.com
+segment.io
+segment.com
+amplitude.com
+heap.io
+clicky.com
+chartbeat.com
+quantserve.com
+scorecardresearch.com
+quantcast.com
+bluekai.com
+agkn.com
+neustar.biz
+rlcdn.com
+bidswitch.net
+demdex.net
+everesttech.net
+mathtag.com
+rubiconproject.com
+adsymptotic.com
+rdx1.lol/cdn-cgi/
+
+# ===== SOCIAL WIDGETS (poids lourd) =====
+facebook.com/plugins
+facebook.com/sharer
+platform.twitter.com
+connect.facebook.net
+staticXX.facebook.com
+syndication.twitter.com
+plugins.linkedin.com
+platform.linkedin.com
+apis.google.com/js/platform.js
+buttons.github.io
+addthis.com
+sharethis.com
+muut.com
+
+# ===== PIXELS DE TRACKING (1x1, poids inutile) =====
+facebook.com/tr?
+google-analytics.com/collect?
+analytics.google.com/collect?
+hotjar.com/hotjar?
+doubleclick.net/activity
+
+# ===== FONTS NON ESSENTIELLES (on garde juste les system fonts) =====
+fonts.googleapis.com
+fonts.gstatic.com
+ajax.googleapis.com/ajax/libs/webfont
+use.typekit.net
+fast.fonts.net
+fonts.bunny.net
+
+# ===== VIDEOS AUToplay (YouTube, Vimeo, Dailymotion) =====
+youtube.com/embed/
+youtube-nocookie.com/embed/
+player.vimeo.com/video/
+dailymotion.com/embed/
+wistia.com/medias/

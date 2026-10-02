@@ -1,0 +1,29 @@
+# Modele de l'entree de menu. Les jetons /usr/bin/BrowserECO / /usr/share/icons/hicolor/512x512/apps/browser-eco.png sont remplaces :
+#  - a l'installation, avec le prefixe reellement utilise (--prefix X) ;
+#  - a la configuration, dans build/BrowserECO.desktop (verifie par la CI).
+# Ne pas utiliser @...@ ici : configure_file en mode @ONLY les remplacerait
+# par les valeurs figees de la configuration.
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=DataSaver Browser
+GenericName=Navigateur économe en données
+Comment=Navigateur économe en données — bloque pubs/trackers, economise la bande passante
+Exec=/usr/bin/BrowserECO
+TryExec=/usr/bin/BrowserECO
+Icon=/usr/share/icons/hicolor/512x512/apps/browser-eco.png
+Terminal=false
+Categories=Network;WebBrowser;
+Keywords=browser;web;eco;datasaver;privacy;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+StartupWMClass=BrowserECO
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=Nouvelle fenêtre
+Exec=/usr/bin/BrowserECO
+
+[Desktop Action new-private-window]
+Name=Nouvelle fenêtre privée
+Exec=/usr/bin/BrowserECO --private

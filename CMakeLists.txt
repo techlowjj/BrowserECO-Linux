@@ -122,15 +122,18 @@ set(CPACK_PACKAGE_VENDOR "BrowserECO")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
     "Navigateur Qt6 econome en donnees : bloque pubs et traqueurs")
-set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/browsereco/browsereco-linux")
-set(CPACK_PACKAGE_CONTACT "BrowserECO <maintainer@example.invalid>")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "BrowserECO <maintainer@example.invalid>")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/techlowjj/BrowserECO-Linux")
+set(CPACK_PACKAGE_CONTACT "techlowjj")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "techlowjj")
 set(CPACK_DEBIAN_PACKAGE_SECTION "web")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENCE")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "BrowserECO")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+# libqt6sql6-sqlite est INDISPENSABLE a l'execution : sans le pilote, Qt
+# n'ouvre aucune base et l'historique comme le cache disparaissent sans
+# message. C'est un paquet d'execution, pas de developpement.
 set(CPACK_DEBIAN_PACKAGE_DEPENDS
-    "libqt6core6t64 | libqt6core6, libqt6gui6, libqt6widgets6, libqt6webenginecore6, libqt6webenginewidgets6, libqt6network6, libqt6sql6, libqt6test6")
+    "libqt6core6t64 | libqt6core6, libqt6gui6, libqt6widgets6, libqt6webenginecore6, libqt6webenginewidgets6, libqt6network6, libqt6sql6, libqt6sql6-sqlite, libqt6test6")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_GENERATOR "DEB;TGZ")
 include(CPack)
