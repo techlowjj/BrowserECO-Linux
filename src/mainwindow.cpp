@@ -1098,6 +1098,9 @@ void MainWindow::showEcoPanelAt(const QPoint &globalPos)
         m_ecoPanel->setWindowTitle(tr("Data saver"));
         m_ecoPanel->setAttribute(Qt::WA_ShowWithoutActivating, false);
         m_ecoPanel->setInterceptor(m_interceptor);
+        m_ecoPanel->setImageServer(m_imageServer);
+        connect(m_ecoPanel, &EcoPanel::imageStatsResetRequested,
+                this, [this]{ if (m_imageServer) m_imageServer->resetStats(); });
         m_ecoPanel->setSearchManager(m_search);
         connect(m_ecoPanel, &EcoPanel::dataSaverToggled, this, &MainWindow::toggleDataSaver);
         connect(m_ecoPanel, &EcoPanel::imagesToggled, this, &MainWindow::toggleImagesOff);

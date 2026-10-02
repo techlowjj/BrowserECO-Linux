@@ -8,6 +8,7 @@ class QLabel;
 class QCheckBox;
 class EcoInterceptor;
 class SearchEngineManager;
+class EcoImageServer;
 
 /*
  * EcoPanel — popover "Data saver" :
@@ -23,6 +24,7 @@ public:
     explicit EcoPanel(QWidget *parent = nullptr);
 
     void setInterceptor(EcoInterceptor *interceptor);
+    void setImageServer(EcoImageServer *server);
     void setSearchManager(SearchEngineManager *s);
 
     // Synchronise l'etat des bascules avec l'etat reel
@@ -45,6 +47,7 @@ signals:
     void autoFallbackToggled(bool on);
     void remoteSuggestToggled(bool on);
     void qualityChanged(int value);
+    void imageStatsResetRequested();
     void engineChanged(const QString &engineId);
     void searxInstanceRequested();
     void providerRequested();
@@ -61,6 +64,7 @@ private:
     void buildUi();
 
     EcoInterceptor *m_interceptor = nullptr;
+    EcoImageServer *m_imageServer = nullptr;
     SearchEngineManager *m_search = nullptr;
 
     QToolButton *m_dataSaver = nullptr;
@@ -77,4 +81,8 @@ private:
     QLabel *m_ratio = nullptr;
     QVector<QLabel *> m_catLabels;
     QVector<QWidget *> m_rows;
+    // Mesure REELLE de la compression d'images (vs l'estimation des blocages)
+    QLabel *m_imgSaved = nullptr;
+    QLabel *m_imgDetail = nullptr;
+    QToolButton *m_imgReset = nullptr;
 };

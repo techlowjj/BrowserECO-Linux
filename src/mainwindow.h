@@ -85,6 +85,11 @@ public:
     // Serveur d'images compressées (statistiques réelles pour le panneau Eco)
     EcoImageServer* imageServer() const { return m_imageServer; }
     QWebEngineProfile* profile() const { return m_profile; }
+    // Crée le panneau si nécessaire (il est créé paresseusement au 1er affichage).
+    EcoPanel* ecoPanel() {
+        if (!m_ecoPanel) showEcoPanelAt(QPoint(0, 0));
+        return m_ecoPanel;
+    }
     // Sert aux liens "browseeco://" de la page d'accueil
     void handleInternalAction(const QString &action, const QString &payload);
 

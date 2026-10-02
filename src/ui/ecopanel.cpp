@@ -1,4 +1,6 @@
 #include "ecopanel.h"
+#include "services/ecoimageserver.h"
+#include "services/imagecodec.h"
 #include "icons.h"
 #include "ecointerceptor.h"
 #include "services/searchengine.h"
@@ -196,6 +198,36 @@ void EcoPanel::buildUi()
     sep3->setFixedHeight(1);
     root->addWidget(sep3);
 
+    // ---- images compressées (MESURE REELLE, pas une estimation)
+    {
+        auto *titre = new QHBoxLayout;
+        auto *t = new QLabel(tr("Images compressées"), this);
+        t->setStyleSheet(QStringLiteral("color:#C6C9DC;font-size:11px;font-weight:600;"));
+        titre->addWidget(t);
+        titre->addStretch(1);
+        m_imgReset = new QToolButton(this);
+        m_imgReset->setText(tr("Remise à zéro"));
+        m_imgReset->setToolTip(tr("Remet les compteurs à zéro sans vider le cache réseau"));
+        m_imgReset->setAutoRaise(true);
+        m_imgReset->setStyleSheet(QStringLiteral("color:#7A7F9E;font-size:10px;"));
+        connect(m_imgReset, &QToolButton::clicked, this, &EcoPanel::imageStatsResetRequested);
+        titre->addWidget(m_imgReset);
+        root->addLayout(titre);
+    }
+    m_imgSaved = new QLabel(QStringLiteral("− 0 Ko réellement économisés"), this);
+    m_imgSaved->setStyleSheet(QStringLiteral("color:#00D4AA;font-size:11.5px;font-weight:600;"));
+    m_imgSaved->setToolTip(tr("Octets téléchargés moins octets servis, mesurés sur le réseau"));
+    root->addWidget(m_imgSaved);
+    m_imgDetail = new QLabel(QStringLiteral("—"), this);
+    m_imgDetail->setStyleSheet(QStringLiteral("color:#7A7F9E;font-size:11px;"));
+    m_imgDetail->setWordWrap(true);
+    root->addWidget(m_imgDetail);
+
+    auto *sepImg = new QFrame(this);
+    sepImg->setObjectName(QStringLiteral("sep"));
+    sepImg->setFixedHeight(1);
+    root->addWidget(sepImg);
+
     // ---- recherche
     auto *searchBox = makeToggle(tr("Moteur : —"), tr("Cliquez pour choisir le moteur"),
                                  Icons::search(), this);
@@ -303,7 +335,8 @@ void EcoPanel::buildUi()
     setFixedWidth(360);
 }
 
-void EcoPanel::setInterceptor(EcoInterceptor *i) { m_interceptor = i; }
+void EcoPanel::setInterceptor(EcoInterceptor *i) { m_interceptor = i; refresh(); }
+void EcoPanel::setImageServer(EcoImageServer *server) { m_imageServer = server; refresh(); }
 void EcoPanel::setSearchManager(SearchEngineManager *s) { m_search = s; }
 
 void EcoPanel::setDataSaverChecked(bool on) { if (m_dataSaver) m_dataSaver->setChecked(on); }
@@ -338,6 +371,24 @@ void EcoPanel::refresh()
                              .arg(blocked).arg(m_interceptor->allowedCount()));
         for (int i = 0; i < m_catLabels.size() && i < kEcoCategoryCount; ++i)
             m_catLabels[i]->setText(QString::number(m_interceptor->categoryCount(i)));
+    }
+    if (m_imageServer && m_imgSaved && m_imgDetail) {
+        const qint64 dl = m_imageServer->originalBytes();
+        const qint64 servi = m_imageServer->servedBytes();
+        const qint64 gain = dl - servi;
+        const qint64 cacheGain = m_imageServer->cache().savedBytes();
+        const QString format = QString::fromLatin1(ImageCodec::preferredFormat());
+        m_imgSaved->setText(tr("− %1 réellement économisés").arg(humanBytes(qMax<qint64>(0, gain + cacheGain))));
+        if (dl > 0) {
+            const int pct = dl > 0 ? int(100.0 * gain / dl) : 0;
+            m_imgDetail->setText(tr("%1 compressées · %2 en cache · %3→%4 (−%5 %) · %6")
+                                     .arg(m_imageServer->compressedCount())
+                                     .arg(m_imageServer->cache().hits())
+                                     .arg(humanBytes(dl)).arg(humanBytes(servi)).arg(qMax(0, pct))
+                                     .arg(format));
+        } else {
+            m_imgDetail->setText(tr("aucune image mesurée pour l'instant"));
+        }
     }
     if (m_search && m_searchBtn) {
         const SearchEngine *e = m_search->current();

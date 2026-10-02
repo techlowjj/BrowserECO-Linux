@@ -229,6 +229,16 @@ void EcoImageServer::fetchAndServe(QTcpSocket *socket, const EcoImageUrl::Target
     });
 }
 
+void EcoImageServer::resetStats()
+{
+    m_originalBytes = 0;
+    m_servedBytes = 0;
+    m_compressed = 0;
+    m_passthrough = 0;
+    m_failed = 0;
+    emit imageServed();     // rafraîchit le panneau sur le champ
+}
+
 void EcoImageServer::respond(QTcpSocket *socket, int code, const QByteArray &contentType,
                              const QByteArray &body, const QByteArray &extraHeaders)
 {

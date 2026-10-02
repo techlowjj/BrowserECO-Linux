@@ -26,6 +26,7 @@
 #include <QWebEngineView>
 
 #include "mainwindow.h"
+#include "ui/ecopanel.h"
 #include "ecointerceptor.h"
 #include "services/ecoimageserver.h"
 #include "services/imagecodec.h"
@@ -41,6 +42,8 @@ private slots:
     void imageTropPetiteEstServieTelleQuelle();
     void imageAbsenteNeCassePasLaPage();
     void rechargementRecompresse();
+    void panneauAfficheLaMesureReelle();
+    void remiseAZeroDesCompteurs();
 
 private:
     QByteArray photo(int largeur, int hauteur);
@@ -357,6 +360,50 @@ void TestImageServe::rechargementRecompresse()
     QVERIFY2(m_win->imageServer()->compressedCount() > compressionsAvant,
              "le rechargement n'a pas été recompressé : la garde anti-boucle n'a pas été libérée");
     QCOMPARE(requetes(QStringLiteral("/photo.png")), 2);   // une fois par chargement, pas plus
+}
+
+void TestImageServe::panneauAfficheLaMesureReelle()
+{
+    activerCompression(true, 65);
+    m_requetes.clear();
+    m_win->imageServer()->cache().clear();
+    chargerPage();
+    QCOMPARE(largeurImage(QStringLiteral("i")), 1600);
+
+    // Le panneau doit afficher la MESURE (pas une estimation) : octets servis <
+    // octets téléchargés, et au moins une image compressée.
+    auto *panneau = m_win->ecoPanel();
+    QVERIFY(panneau);
+    panneau->refresh();
+    const QList<QLabel *> labels = panneau->findChildren<QLabel *>();
+    QString tout;
+    for (const QLabel *l : labels) tout += l->text() + QStringLiteral(" | ");
+    QVERIFY2(tout.contains(QStringLiteral("réellement économisés")),
+             qPrintable(QStringLiteral("pas de mesure réelle : ") + tout));
+    QVERIFY2(tout.contains(QStringLiteral("compressées")),
+             qPrintable(QStringLiteral("pas de compteur d'images : ") + tout));
+    // Pas de WebP sur ce Qt : le format affiché doit être le format reel.
+    QVERIFY2(tout.contains(QStringLiteral("JPEG")) || tout.contains(QStringLiteral("WEBP")),
+             qPrintable(QStringLiteral("format absent : ") + tout));
+}
+
+void TestImageServe::remiseAZeroDesCompteurs()
+{
+    activerCompression(true, 65);
+    m_requetes.clear();
+    m_win->imageServer()->cache().clear();
+    chargerPage();
+    QCOMPARE(largeurImage(QStringLiteral("i")), 1600);
+    QVERIFY(m_win->imageServer()->originalBytes() > 0);
+
+    // Le bouton de remise à zéro doit vider les compteurs SANS vider le cache
+    // réseau (retélécharger serait un gaspillage de bande passante).
+    const int cacheAvant = m_win->imageServer()->cache().count();
+    m_win->imageServer()->resetStats();
+    QCOMPARE(m_win->imageServer()->originalBytes(), 0);
+    QCOMPARE(m_win->imageServer()->servedBytes(), 0);
+    QCOMPARE(m_win->imageServer()->compressedCount(), 0);
+    QCOMPARE(m_win->imageServer()->cache().count(), cacheAvant);   // cache intact
 }
 
 QTEST_MAIN(TestImageServe)

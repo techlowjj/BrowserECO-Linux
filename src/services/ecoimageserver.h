@@ -59,6 +59,11 @@ public:
     int failedCount() const { return m_failed; }
     ImageCache &cache() { return m_cache; }
 
+    /* Remet les compteurs à zéro, SANS vider le cache réseau : l'utilisateur
+     * veut repartir de zéro dans l'affichage, pas retélécharger des images déjà
+     * en cache (cela gaspillerait de la bande passante). */
+    void resetStats();
+
 signals:
     void imageServed();
 
