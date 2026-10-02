@@ -9,6 +9,8 @@
 set(_unit_tests
     test_adblock
     test_imagecodec
+    test_imagecache
+    test_ecoimageurl
     test_images
     test_searchengine
     test_settings
@@ -19,6 +21,7 @@ set(_unit_tests
 )
 set(_gui_tests
     test_headers
+    test_image_serve
     serp_test
     freeze_test
     ui_test

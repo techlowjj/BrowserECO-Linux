@@ -12,6 +12,8 @@
 #include <QtTest>
 #include "ecointerceptor.h"
 #include "services/adblocker.h"
+#include "services/ecoimageurl.h"
+#include "services/imagecodec.h"
 
 class TestImages : public QObject {
     Q_OBJECT
@@ -23,6 +25,8 @@ private slots:
     void listeTrieeEtCompteur();
     void reinitialisation();
     void imageDeException_nonBloquee();   // decision d'interception
+    void pasDeBoucleDeReecriture();       // notre URL ne doit jamais se reecrire
+    void queLesImagesSontReecrites();     // et rien d'autre
 };
 
 void TestImages::correspondanceSurFrontieresDeLabel()
@@ -125,6 +129,61 @@ void TestImages::imageDeException_nonBloquee()
     // mais ne doit rien casse.
     eco.setImagesOff(false);
     QVERIFY(!imagesBloquees(QStringLiteral("i.ytimg.com"), QStringLiteral("autre.fr")));
+}
+
+void TestImages::pasDeBoucleDeReecriture()
+{
+    // La REGLE qui empeche la boucle : notre propre URL ne doit jamais etre
+    // reecrite, puisqu'elle est deja en http et donc « encodable » — sans cela
+    // elle se reecrit elle-meme indefiniment (mesure a 99 iterations).
+    AdBlocker ab;
+    EcoInterceptor eco(&ab);
+    const QUrl base(QStringLiteral("http://127.0.0.1:41234"));
+    eco.setImageCompression(true, 65, base);
+    const auto image = QWebEngineUrlRequestInfo::ResourceTypeImage;
+    const auto page = QWebEngineUrlRequestInfo::ResourceTypeMainFrame;
+
+    QVERIFY(eco.wouldRewriteImage(QUrl(QStringLiteral("https://cdn.exemple.fr/a.jpg")), image));
+
+    const QUrl encodee = EcoImageUrl::encode(base,
+                                             QUrl(QStringLiteral("https://cdn.exemple.fr/a.jpg")),
+                                             ImageCodec::kDefaultWidth, 65);
+    QVERIFY(!encodee.isEmpty());
+    QVERIFY2(!eco.wouldRewriteImage(encodee, image), "notre propre URL reecrite : boucle infinie");
+
+    // Meme hote, autre port : ce n'est pas nous.
+    QVERIFY(eco.wouldRewriteImage(QUrl(QStringLiteral("http://127.0.0.1:55555/photo.png")), image));
+    // Un type qui n'est pas une image n'est jamais reecrit.
+    QVERIFY(!eco.wouldRewriteImage(QUrl(QStringLiteral("https://cdn.exemple.fr/a.jpg")), page));
+    // Reglage desactive ou serveur arrete : jamais.
+    eco.setImageCompression(false, 65, base);
+    QVERIFY(!eco.wouldRewriteImage(QUrl(QStringLiteral("https://cdn.exemple.fr/a.jpg")), image));
+    eco.setImageCompression(true, 65, QUrl());
+    QVERIFY(!eco.wouldRewriteImage(QUrl(QStringLiteral("https://cdn.exemple.fr/a.jpg")), image));
+}
+
+void TestImages::queLesImagesSontReecrites()
+{
+    AdBlocker ab;
+    EcoInterceptor eco(&ab);
+    const QUrl base(QStringLiteral("http://127.0.0.1:41234"));
+    eco.setImageCompression(true, 65, base);
+    const auto image = QWebEngineUrlRequestInfo::ResourceTypeImage;
+
+    // Types qui ne sont pas des images, meme s'ils chargent des octets d'image :
+    // les compresser casserait des scripts ou des feuilles de style.
+    for (auto t : {QWebEngineUrlRequestInfo::ResourceTypeScript,
+                   QWebEngineUrlRequestInfo::ResourceTypeXhr,
+                   QWebEngineUrlRequestInfo::ResourceTypeStylesheet,
+                   QWebEngineUrlRequestInfo::ResourceTypeFontResource,
+                   QWebEngineUrlRequestInfo::ResourceTypeFavicon})
+        QVERIFY(!eco.wouldRewriteImage(QUrl(QStringLiteral("https://a.fr/track.png")), t));
+
+    // file: et data: ne sont jamais compresses (le codec les refuse).
+    QVERIFY(!eco.wouldRewriteImage(QUrl(QStringLiteral("file:///tmp/a.png")), image));
+    QVERIFY(!eco.wouldRewriteImage(QUrl(QStringLiteral("data:image/png;base64,AAA")), image));
+    // Une vraie image bien sur.
+    QVERIFY(eco.wouldRewriteImage(QUrl(QStringLiteral("https://a.fr/photo.png")), image));
 }
 
 QTEST_MAIN(TestImages)

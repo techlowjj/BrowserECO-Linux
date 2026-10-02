@@ -2,12 +2,14 @@
 #include <QWebEngineUrlRequestInterceptor>
 #include <QWebEngineUrlRequestInfo>
 #include "services/adblocker.h"
+#include "services/imagecodec.h"
 #include <QAtomicInt>
 #include <QAtomicInteger>
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QList>
 #include <QSet>
+#include <QMutex>
 #include <QReadWriteLock>
 #include <QStringList>
 #include <QVector>
@@ -16,7 +18,7 @@
  * Port de Services/RequestInterceptor.cs
  * Niveau 1 : bloque pubs/trackers/fonts/media/prefetch + ajoute Save-Data
  * QWebEngineUrlRequestInterceptor ne peut pas modifier le body (limitation Qt),
- * donc ImageOptimizer sera branche en Niveau 2 via UrlSchemeHandler.
+ * donc EcoImageServer sert une image compressee (voir wouldRewriteImage).
  *
  * Ajout :compteurs par categorie pour afficher une economie de data chiffree.
  */
@@ -68,6 +70,24 @@ public:
 
     void setDataSaverEnabled(bool e) { m_dataSaver = e; }
     void setImagesOff(bool off) { m_imagesOff = off; }
+
+    /* Compression des images : réécrit l'URL de chaque image vers notre serveur
+     * local (EcoImageServer), qui la sert compressée. La réécriture passe par
+     * markIfRewritten(), sans quoi la demande revient dans cet intercepteur et
+     * se réécrit indéfiniment. */
+    void setImageCompression(bool on, int quality, const QUrl &serverBase) {
+        m_compressImages = on;
+        m_imageQuality = ImageCodec::clampQuality(quality);
+        m_imageServer = serverBase;
+    }
+    bool imageCompression() const { return m_compressImages; }
+
+    /* Règle de réécriture, extraite pour être TESTÉE seule : c'est la barrière
+     * qui empêche la boucle. Sans elle, l'URL de notre serveur local (qui est
+     * aussi en http) se réécrivait à l'infini — mesuré à 99 itérations en un
+     * chargement de page, l'image n'arrivant jamais. */
+    bool wouldRewriteImage(const QUrl &url,
+                           QWebEngineUrlRequestInfo::ResourceType type) const;
     void setUltraEcoEnabled(bool e) { m_ultraEco = e; }
     // Sec-GPC ("Global Privacy Control") : le signal normalise qui demande aux
     // sites de limiter les donnees. 1 octet par requete, aucune contrepartie
@@ -150,7 +170,15 @@ private:
     AdBlocker *m_adblocker = nullptr;
     bool m_dataSaver = true;
     bool m_imagesOff = true;
+    bool m_compressImages = false;
+    QUrl m_imageServer;                // racine du serveur d'images local
+    int m_imageQuality = ImageCodec::kDefaultQuality;
     bool m_secGpc = true;
+    // URL déjà réécrites. Plafonnées : au-delà on repart de zéro, sinon la
+    // mémoire grossirait sans borne pendant une longue session.
+    static constexpr int kMaxRewrittenUrls = 4096;
+    mutable QMutex m_rewrittenLock;
+    QSet<QString> m_rewritten;
     bool m_ultraEco = false;
     bool m_allowChallengeImages = true;
     QAtomicInt m_statsDirty = 0;

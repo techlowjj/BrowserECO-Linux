@@ -48,6 +48,23 @@ QByteArray contentTypeForFormat(QByteArray format)
                                                        : QByteArrayLiteral("image/jpeg");
 }
 
+QString guessContentType(const QByteArray &d)
+{
+    // Reniflage par les octets d'en-tête : le content-type déclaré par le
+    // serveur est parfois absent, générique (« application/octet-stream ») ou
+    // faux, et c'est lui qui décide si le navigateur décode l'image.
+    if (d.startsWith(QByteArray::fromHex("89504e470d0a1a0a")))   return QStringLiteral("image/png");
+    if (d.startsWith(QByteArray::fromHex("ffd8ff")))             return QStringLiteral("image/jpeg");
+    if (d.startsWith("GIF87a") || d.startsWith("GIF89a"))        return QStringLiteral("image/gif");
+    if (d.startsWith("RIFF") && d.size() > 12 && d.mid(8, 4) == "WEBP")
+                                                                  return QStringLiteral("image/webp");
+    if (d.startsWith("BM"))                                      return QStringLiteral("image/bmp");
+    if (d.startsWith(QByteArray::fromHex("49492a00"))
+        || d.startsWith(QByteArray::fromHex("4d4d002a")))        return QStringLiteral("image/tiff");
+    if (d.startsWith("<?xml") || d.startsWith("<svg"))          return QStringLiteral("image/svg+xml");
+    return {};
+}
+
 Result compress(const Request &req, const QByteArray &forcedFormat)
 {
     Result r;

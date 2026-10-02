@@ -3,6 +3,7 @@
 #include "ui/ecopanel.h"
 #include "ui/icons.h"
 #include "services/settingsstore.h"
+#include "services/ecoimageserver.h"
 
 #include <QApplication>
 #include <QStandardPaths>
@@ -160,8 +161,15 @@ MainWindow::MainWindow(QWidget *parent, const QString &dataDir, bool privateMode
     }
     m_adblocker.loadFilters(filterDir.isEmpty() ? QString() : filterDir);
 
+    // Serveur d'images local : c'est lui qui sert les images compressées.
+    // Il doit tourner AVANT l'intercepteur, qui a besoin de son adresse.
+    m_imageServer = new EcoImageServer(this);
+    if (m_imageServer->start())
+        connect(m_imageServer, &EcoImageServer::imageServed, this, &MainWindow::updateStats);
+
     m_interceptor = new EcoInterceptor(&m_adblocker, this);
     m_profile->setUrlRequestInterceptor(m_interceptor);
+    applyQuality(m_quality, false);   // avant tout chargement : branche l'état
     connect(m_interceptor, &EcoInterceptor::statsChanged, this, &MainWindow::onBlocked);
     connect(m_serpGuard, &SerpGuard::blocked, this, &MainWindow::onSerpBlocked);
     connect(m_serpGuard, &SerpGuard::succeeded, this, &MainWindow::adoptWorkingEngine);
@@ -1044,9 +1052,12 @@ void MainWindow::applyQuality(int value, bool fromUser)
 {
     value = ImageCodec::clampQuality(value);
     if (fromUser) m_quality = value;
-    // La compression elle-meme n'est pas encore branchee (palier B : gestionnaire
-    // d'images sur schema perso). Ce reglage est desormais borne par le codec
-    // lui-meme plutot que par un qBound duplique, et il sera consomme tel quel.
+    // Le curseur est enfin branché : qualité 0 = pas de compression, sinon les
+    // images passent par notre serveur local et reviennent compressées.
+    // La borne est celle du codec (source unique), pas un qBound dupliqué.
+    if (m_interceptor)
+        m_interceptor->setImageCompression(value > 0 && m_imageServer && m_imageServer->isRunning(),
+                                          value, m_imageServer ? m_imageServer->base() : QUrl());
     if (m_ecoPanel) m_ecoPanel->refresh();
     if (fromUser) {
         scheduleSaveSettings();   // un cran de curseur = une ecriture groupee

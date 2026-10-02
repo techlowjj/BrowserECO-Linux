@@ -27,6 +27,8 @@ namespace ImageCodec {
 constexpr int kMaxWidth = 1600;
 constexpr int kMinQuality = 0;
 constexpr int kMaxQuality = 85;
+constexpr int kDefaultWidth = kMaxWidth;      // ce qui est demandé par défaut
+constexpr int kDefaultQuality = 65;
 constexpr qint64 kDefaultMinBytes = 10 * 1024;
 
 enum class Verdict {
@@ -44,8 +46,8 @@ QString verdictToString(Verdict v);
 struct Request {
     QByteArray data;
     QString contentType;                 // tel que servi par le serveur d'origine
-    int targetWidth = kMaxWidth;         // largeur maximale voulue
-    int quality = 65;                    // 0-85 (0 = pas de compression)
+    int targetWidth = kDefaultWidth;     // largeur maximale voulue
+    int quality = kDefaultQuality;       // 0-85 (0 = pas de compression)
     qint64 minBytes = kDefaultMinBytes;
 };
 
@@ -70,6 +72,11 @@ struct Result {
 bool webpAvailable();
 QByteArray preferredFormat();            // "WEBP" ou "JPEG"
 QByteArray contentTypeForFormat(QByteArray format);
+
+/* Reniflage du type MIME par les octets d'en-tête (pas par le content-type
+   déclaré par le serveur, qui est parfois absent ou faux : c'est ce type-là
+   qui décide si le navigateur décode l'image ou affiche du texte). */
+QString guessContentType(const QByteArray &data);
 
 // Bornes centralisées (partagées avec l'IHM).
 int clampQuality(int q);

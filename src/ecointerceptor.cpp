@@ -1,4 +1,5 @@
 #include "ecointerceptor.h"
+#include "services/ecoimageurl.h"
 #include <QUrl>
 #include <QDebug>
 #include <QRegularExpression>
@@ -61,6 +62,22 @@ int EcoInterceptor::imageAllowedCount() const
 {
     QReadLocker lock(&m_imageLock);
     return int(m_imageAllowed.size());
+}
+
+bool EcoInterceptor::wouldRewriteImage(
+    const QUrl &url, QWebEngineUrlRequestInfo::ResourceType type) const
+{
+    if (!m_compressImages || type != QWebEngineUrlRequestInfo::ResourceTypeImage)
+        return false;
+    if (!m_imageServer.isValid()) return false;
+    // NOTRE PROPRE URL ne doit jamais être réécrite : elle est déjà en http, donc
+    // encode() l'accepterait et on se réécrirait soi-même indéfiniment.
+    if (url.scheme().compare(m_imageServer.scheme(), Qt::CaseInsensitive) == 0
+        && url.host() == m_imageServer.host()
+        && (url.port(-1) < 0 || url.port(-1) == m_imageServer.port(-1)))
+        return false;
+    return !EcoImageUrl::encode(m_imageServer, url, ImageCodec::kDefaultWidth, m_imageQuality)
+                .isEmpty();
 }
 
 EcoRequestHeaders EcoInterceptor::privacyHeaders(bool dataSaver, bool secGpc)
@@ -277,6 +294,19 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
         noteBlock(EcoCategory::Images);
         return;
     }
+    // 4. Compression des images : on renvoie l'image vers notre serveur local,
+    // qui la sert compressée (WebP/JPEG, redimensionnée). Trois gardes :
+    //   - réglage désactivé ou serveur arrêté -> rien ;
+    //   - l'URL doit être encodable (http/https), sinon on ne touche à rien ;
+    //   - la demande ne repasse pas par ici (garde anti-boucle).
+    // On n'inscrit dans la garde que ce qui a RÉELLEMENT été réécrit : sinon un
+    // encodage impossible bloquerait l'image pour le reste de la session.
+    if (wouldRewriteImage(url, type)) {
+        info.redirect(EcoImageUrl::encode(m_imageServer, url, ImageCodec::kDefaultWidth,
+                                          m_imageQuality));
+        return;
+    }
+
     // Debug navigation principale
     if (isMainFrame) {
         qDebug() << "EcoInterceptor: allow mainFrame type" << type << urlStr.left(150);

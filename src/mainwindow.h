@@ -22,6 +22,7 @@
 
 #include "ecointerceptor.h"
 #include "services/adblocker.h"
+class EcoImageServer;
 #include "services/cachemanager.h"
 #include "services/historymanager.h"
 #include "services/imagecodec.h"
@@ -81,6 +82,9 @@ public:
     SearchEngineManager* searchManager() const { return m_search; }
     AdBlocker* adblocker() const { return const_cast<AdBlocker *>(&m_adblocker); }
     EcoInterceptor* interceptor() const { return m_interceptor; }
+    // Serveur d'images compressées (statistiques réelles pour le panneau Eco)
+    EcoImageServer* imageServer() const { return m_imageServer; }
+    QWebEngineProfile* profile() const { return m_profile; }
     // Sert aux liens "browseeco://" de la page d'accueil
     void handleInternalAction(const QString &action, const QString &payload);
 
@@ -197,6 +201,7 @@ private:
     // compression). Utilise par le gestionnaire d'images (schema perso).
     int m_quality = 65;
     EcoInterceptor *m_interceptor = nullptr;
+    EcoImageServer *m_imageServer = nullptr;
     QWebEngineProfile *m_profile = nullptr;
     SearchEngineManager *m_search = nullptr;
     SerpGuard *m_serpGuard = nullptr;

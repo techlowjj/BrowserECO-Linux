@@ -57,6 +57,12 @@ set(CORE_SOURCES
     src/services/historymanager.h
     src/services/imagecodec.cpp
     src/services/imagecodec.h
+    src/services/imagecache.cpp
+    src/services/imagecache.h
+    src/services/ecoimageurl.cpp
+    src/services/ecoimageurl.h
+    src/services/ecoimageserver.cpp
+    src/services/ecoimageserver.h
     src/services/searchengine.cpp
     src/services/searchengine.h
     src/services/serpguard.cpp

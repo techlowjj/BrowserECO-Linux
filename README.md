@@ -330,7 +330,7 @@ pour ceux qui démarrent QtWebEngine) et s'exécute dans son propre dossier vide
 recréé à chaque exécution — aucun test ne peut voir un `settings.txt`, une base
 ou un profil réel, ni les réglages laissés par un autre test.
 
-**14 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
+**17 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
 
 | Suite | Couverture |
 |---|---|
@@ -342,6 +342,9 @@ ou un profil réel, ni les réglages laissés par un autre test.
 | `test_icons` | chaque icône dessine bien des pixels |
 | `test_eco_stats` | cohérence et bornage des compteurs d'économie |
 | `test_images` | exceptions d'images par site : frontières de label, sous-domaines, faux positifs (`notexample.com`), persistance, idempotence |
+| `test_imagecache` | cache LRU borné en **octets** (et non en entrées), clé incluant la transformation, compteurs, 4 threads en parallèle |
+| `test_ecoimageurl` | URL signées du serveur local : aller-retour, URL > 400 caractères, et **tentatives de forge** (signature absente/falsifiée, charge utile remplacée, w/q altérés, mauvais port) |
+| `test_image_serve` | **bout en bout** : vrai navigateur + vrai serveur HTTP. Image 1800 px reçue en 1600 px, une seule requête réseau, octets servis < téléchargés, compression off = inchangé, image 404 = page intacte, rechargement bien recompressé |
 | `test_imagecodec` | politique de compression **seule** (aucun réseau) : refus (seuil, qualité 0, GIF/SVG, données illisibles), redimensionnement (plafond, jamais d'agrandissement, aspect), choix de format, et l'invariant **« compressé ⇒ plus léger »** vérifié sur 120 combinaisons |
 | `test_headers` | **serveur HTTP local qui lit les en-têtes reçus** : `Sec-GPC` et `Save-Data` partent vraiment, se coupent vraiment, restent indépendants (page *et* images) |
 | `serp_test` | repli anti-challenge, détection de mur, exemption d'images sur les pages de vérification. **2 cas font de vraies requêtes réseau** : ignorés sauf si `BROWSERECO_NET_TESTS=1` (un runner CI, en adresse cloud, reçoit un mur anti-bot différent et rendrait le test instable) |
@@ -417,12 +420,15 @@ BrowserECO-Linux/
 │   │   ├── adblocker.{h,cpp}
 │   │   ├── cachemanager.{h,cpp}
 │   │   ├── historymanager.{h,cpp}
-│   │   └── imagecodec.{h,cpp}         ← politique de compression (testée seule)
+│   │   ├── imagecodec.{h,cpp}         ← politique de compression (testée seule)
+│   │   ├── imagecache.{h,cpp}         ← cache LRU des images servies
+│   │   ├── ecoimageurl.{h,cpp}        ← URL signées du serveur d'images
+│   │   └── ecoimageserver.{h,cpp}     ← serveur 127.0.0.1 qui sert les images
 │   └── ui/
 │       ├── omnibox.{h,cpp}         ← barre d'adresse + suggestions
 │       ├── ecopanel.{h,cpp}        ← panneau Data saver
 │       └── icons.{h,cpp}           ← icônes vectorielles (QPainter)
-├── tests/                          ← 14 tests + CMakeLists.txt (CTest)
+├── tests/                          ← 17 tests + CMakeLists.txt (CTest)
 ├── Filters/                        ← EasyList + EasyPrivacy (~116 000 règles)
 │   ├── update.sh                   ← téléchargement des listes (non versionnées)
 │   ├── LICENSE                     ← attribution obligatoire
@@ -523,18 +529,49 @@ cpack --config build-deb/CPackConfig.cmake -G DEB
   dépôt (3,5 Mo) ; sans elles l'application démarre et l'indique
   (« Filtres : 0 »).
 
-## Limite connue
+## Compression des images (active)
 
-Le curseur « qualité des images » enregistre le réglage `quality=` et la **décision
-de compression est implémentée et testée** (`ImageCodec`, 17 assertions : refus,
-plafond de largeur, aspect, format, et l'invariant « compressé ⇒ plus léger »),
-mais **rien ne l'appelle encore** : il manque le gestionnaire qui sert les images
-compressées (schéma personnalisé), planned pour la phase P4 du palier B. Le
-réglage est donc encore sans effet sur le trafic : c'est la seule fonction annoncée
-qui ne fait rien.
+Le curseur de qualité est **branché** : chaque image est réécrite vers un petit
+serveur HTTP local (`127.0.0.1`, port éphémère), qui récupère l'original, le
+compresse et le sert. Aucune connexion ne sort de la machine.
 
-Détail important découvert en mesurant : cette installation de Qt **n'a pas
-d'encodeur WebP** (`QImageWriter` ne propose que png/jpeg/bmp/ico/xpm) ; le
-codec bascule donc automatiquement en JPEG, et le gain relatif mesuré est
-alors de −41 % à −76 % au lieu de −52 % à −80 %. Le panneau Eco indiquera le
-format réellement utilisé.
+```
+page ──▶ intercepteur ──redirection──▶ 127.0.0.1:port/i?u=<original>&s=<signature>
+                                            │  QNAM + en-têtes rejoués
+                                            ▼
+                                        ImageCodec  ──▶  cache LRU  ──▶ navigateur
+```
+
+| Décision | Pourquoi |
+|---|---|
+| **Serveur local, pas schéma privé** | Qt 6.8 n'honore pas la redirection d'un intercepteur vers un schéma personnalisé pour une sous-ressource : l'original est annulé et rien n'est demandé (mesuré). `http://127.0.0.1` est de plus explicitement exempté du blocage « mixed content ». |
+| **URL signées** | Notre URL est une vraie URL `http://` : une page pourrait l'appeler. Chaque URL générée est signée avec une clé aléatoire créée au démarrage du processus. Une page peut seulement **rejouer** une URL qu'elle a déjà vue passer, jamais demander une autre cible (testé : charge utile remplacée, signature falsifiée, w/q altérés, autre port). |
+| **Jamais de seconde requête** | Quand la compression ne sert à rien (GIF, SVG, image sous le seuil), le serveur répond avec les octets déjà reçus. Rediriger vers l'original ferait télécharger l'image deux fois. |
+| **Échec ouvert** | Erreur réseau ou délai dépassé → `502`, le navigateur retente l'original et l'image s'affiche. Une image en 404 ne casse pas la page (testé). |
+| **Pas d'`Authorization` rejouée** | Une redirection du serveur vers un autre hôte la lui transmettrait. |
+| **CORS absent** | Une page ne doit pas pouvoir lire la réponse, même d'une URL signée qu'elle a vue passer. |
+
+**Limites assumées, mesurées et documentées :**
+
+- **Cookies non rejoués** : `QWebEngineCookieStore` n'expose aucune lecture dans ce
+  Qt. Une image derrière une authentification échoue en `403` → l'échec ouvert la
+  fait retenter par le navigateur, donc elle s'affiche, simplement non compressée.
+- **Chrome 142+** : les requêtes vers la boucle locale demanderont une permission
+  (« loopback-network »). Sans effet sur le Qt 6.8 embarqué ; à surveiller si le
+  projet passe à un Chromium plus récent.
+- **Pas de WebP ici** : cette installation n'a pas d'encodeur WebP, le codec
+  bascule en JPEG. Avec `qt6-image-formats-plugins`, le gain gagne ~20 % de plus.
+- Les images en CSS (`background-image`) ou construites en JavaScript ne passent
+  pas par l'intercepteur : seules les balises `<img>` sont réécrites.
+
+**Gain mesuré** sur de vraies images (fonds d'écran 3840×2160 en PNG) :
+
+| Largeur servie | Octets économisés |
+|---|---|
+| 1600 px | −79 % à −95 % |
+| 1200 px | −87 % à −97 % |
+| 800 px | −94 % à −98 % |
+
+Le test `test_image_serve` rejoue tout cela dans un vrai navigateur contre un
+vrai serveur : image reçue en 1600 px au lieu de 1800, **une seule** requête
+réseau pour l'image, et octets servis < octets téléchargés.

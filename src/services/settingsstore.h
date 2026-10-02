@@ -24,7 +24,9 @@ struct SettingsData {
     bool imagesOff = true;
     bool ultraEco = false;
     bool favicons = true;
-    int quality = 65;          // 0-85
+    int quality = 65;          // 0-85. 0 = compression des images désactivée.
+                               // Source de vérité unique : pas de booléen
+                               // séparé, qui finirait par diverger du curseur.
     double zoom = 1.0;         // 0.25-3.0
     QString engineId;
     QString searxUrl;
