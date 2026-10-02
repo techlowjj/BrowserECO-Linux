@@ -1,5 +1,9 @@
 # BrowserECO-Linux — DataSaver Browser (Qt6 C++)
 
+[![Build et tests](https://github.com/techlowjj/BrowserECO-Linux/actions/workflows/Build%20et%20tests/badge.svg)](https://github.com/techlowjj/BrowserECO-Linux/actions/workflows/Build%20et%20tests)
+[![Licence GPL-3.0](https://img.shields.io/badge/licence-GPL--3.0-blue.svg)](LICENCE)
+[![Qt](https://img.shields.io/badge/Qt-6.4%2B-41cd52.svg)](https://doc.qt.io/qt-6/)
+
 Navigateur portable Linux orienté **économie de données** et **vie privée**.
 Version **1.3** — exception d'images par site, robustesse, blocage adverts
 conforme, build et tests propres.
