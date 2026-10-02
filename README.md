@@ -8,8 +8,8 @@ Navigateur portable Linux orienté **économie de données** et **vie privée**.
 Version **1.3** — exception d'images par site, robustesse, blocage adverts
 conforme, build et tests propres.
 
-> L'original (version 1.0) est conservé tel quel dans
-> `BACKUP-original-20260929-113846/` : sources, binaire et réglages.
+> L'historique complet du projet est dans les tags Git : `v1.2.0` (base de
+> référence « éco + robustesse ») et `v1.3.0` (exception d'images par site).
 
 ---
 
