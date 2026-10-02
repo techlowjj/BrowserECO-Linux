@@ -103,6 +103,7 @@ private slots:
     void toggleDataSaver(bool checked);
     void toggleImagesOff(bool checked);
     void toggleUltraEco(bool checked);
+    void toggleSecGpc(bool checked);
     void onQualityChanged(int value);
     void showHistory();
     void showDownloads();
@@ -210,6 +211,7 @@ private:
     // EFFECTIVE : le mode Ultra la plafonne a 50 sans ecraser le reglage.
     int m_quality = 65;
     bool m_favicons = true;
+    bool m_secGpc = true;
     bool m_isPrivate = false;
     bool m_restoreSession = false;
     QString m_serpEngine;

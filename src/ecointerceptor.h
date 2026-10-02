@@ -4,6 +4,8 @@
 #include "services/adblocker.h"
 #include <QAtomicInt>
 #include <QAtomicInteger>
+#include <QList>
+#include <QPair>
 #include <QSet>
 #include <QReadWriteLock>
 #include <QStringList>
@@ -41,6 +43,16 @@ public:
     void setDataSaverEnabled(bool e) { m_dataSaver = e; }
     void setImagesOff(bool off) { m_imagesOff = off; }
     void setUltraEcoEnabled(bool e) { m_ultraEco = e; }
+    // Sec-GPC ("Global Privacy Control") : le signal normalise qui demande aux
+    // sites de limiter les donnees. 1 octet par requete, aucune contrepartie
+    // mesurable sur les ressources statiques (voir README) mais c'est le seul
+    // signal qui exprime le consentement de l'utilisateur a tous les sites.
+    void setSecGpcEnabled(bool on) { m_secGpc = on; }
+    bool secGpcEnabled() const { return m_secGpc; }
+
+    // En-tetes de requete : fonction PURE (testable sans navigateur).
+    // Save-Data : demande de mode economie. Sec-GPC : demande de protection.
+    static QList<QPair<QByteArray, QByteArray>> privacyHeaders(bool dataSaver, bool secGpc);
     /* ---- Exceptions d'images par site -------------------------------------
      * « Images OFF » est le reglage le plus rentable (-90 % de moyenne mesuree),
      * mais il rend les sites photos/recettes illisibles. L'utilisateur peut
@@ -112,6 +124,7 @@ private:
     AdBlocker *m_adblocker = nullptr;
     bool m_dataSaver = true;
     bool m_imagesOff = true;
+    bool m_secGpc = true;
     bool m_ultraEco = false;
     bool m_allowChallengeImages = true;
     QAtomicInt m_statsDirty = 0;

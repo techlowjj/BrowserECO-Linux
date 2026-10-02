@@ -113,6 +113,15 @@ void EcoPanel::buildUi()
     root->addWidget(m_favicons);
     connect(m_favicons, &QToolButton::toggled, this, &EcoPanel::faviconsToggled);
 
+    // ---- Sec-GPC
+    m_secGpc = makeToggle(tr("Signal vie privée  (Sec-GPC)"),
+                          tr("Envoie « Sec-GPC: 1 » : demande aux sites de limiter les données "
+                             "(images, vidéos). 1 octet par requête."),
+                          Icons::lock(), this);
+    m_secGpc->setObjectName(QStringLiteral("ecoToggle"));
+    root->addWidget(m_secGpc);
+    connect(m_secGpc, &QToolButton::toggled, this, &EcoPanel::secGpcToggled);
+
     auto *sep1 = new QFrame(this);
     sep1->setObjectName(QStringLiteral("sep"));
     sep1->setFrameShape(QFrame::NoFrame);
@@ -301,6 +310,7 @@ void EcoPanel::setDataSaverChecked(bool on) { if (m_dataSaver) m_dataSaver->setC
 void EcoPanel::setImagesChecked(bool on)     { if (m_images) m_images->setChecked(on); }
 void EcoPanel::setUltraChecked(bool on)      { if (m_ultra) m_ultra->setChecked(on); }
 void EcoPanel::setFaviconsChecked(bool on)   { if (m_favicons) m_favicons->setChecked(on); }
+void EcoPanel::setSecGpcChecked(bool on)     { if (m_secGpc) m_secGpc->setChecked(on); }
 void EcoPanel::setQualityValue(int v)        { if (m_quality) { m_quality->setValue(v); m_qualityValue->setText(QString::number(v)); } }
 
 void EcoPanel::onSliderMoved(int v)

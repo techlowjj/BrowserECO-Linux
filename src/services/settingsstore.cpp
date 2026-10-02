@@ -65,6 +65,7 @@ SettingsData parse(const QString &contents)
         else if (key == QLatin1String("autoFallback"))     d.autoFallback = toBool(val, d.autoFallback);
         else if (key == QLatin1String("remoteSuggest"))   d.remoteSuggestions = toBool(val, d.remoteSuggestions);
         else if (key == QLatin1String("restoreSession"))   d.restoreSession = toBool(val, d.restoreSession);
+        else if (key == QLatin1String("secGpc"))          d.secGpc = toBool(val, d.secGpc);
         else if (key == QLatin1String("session"))          d.session = val.split(QLatin1Char('|'), Qt::SkipEmptyParts);
         else if (key == QLatin1String("imageAllow"))       d.imageAllowedHosts = parseHostList(val);
         // cle inconnue : ignoree (le format peut evoluer sans casser l'ancien)
@@ -113,6 +114,7 @@ QString serialize(const SettingsData &d)
     s += QStringLiteral("autoFallback=%1\n").arg(d.autoFallback ? 1 : 0);
     s += QStringLiteral("remoteSuggest=%1\n").arg(d.remoteSuggestions ? 1 : 0);
     s += QStringLiteral("restoreSession=%1\n").arg(d.restoreSession ? 1 : 0);
+    s += QStringLiteral("secGpc=%1\n").arg(d.secGpc ? 1 : 0);
     s += QStringLiteral("imageAllow=%1\n").arg(joinHostList(d.imageAllowedHosts));
     s += QStringLiteral("session=%1\n").arg(d.session.join(QLatin1Char('|')));
     return s;

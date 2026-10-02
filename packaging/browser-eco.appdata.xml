@@ -20,6 +20,7 @@
       <li>Moteur de recherche léger sans JavaScript, avec repli automatique si un moteur affiche un mur anti-bot</li>
       <li>Mode privé : profil hors disque, rien n'est écrit</li>
       <li>Aucun télémétrage, aucun serveur de recherche interne</li>
+      <li>Signal Sec-GPC envoyé par défaut, désactivable</li>
       <li>Exception d'images par site : le clic droit autorise un site, l'autorisation est mémorisée</li>
     </ul>
   </description>
@@ -49,6 +50,16 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.4.0" date="2026-10-02">
+      <description>
+        <p>
+          Signal vie privee Sec-GPC (Global Privacy Control) envoye sur toutes
+          les requetes, avec interrupteur et preuve par test de bout en bout.
+          Aucun gain d'octets mesure sur les ressources statiques : le signal
+          est livre pour sa justesse, pas pour une economie annoncee.
+        </p>
+      </description>
+    </release>
     <release version="1.3.0" date="2026-10-01">
       <description>
         <p>

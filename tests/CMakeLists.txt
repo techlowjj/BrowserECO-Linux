@@ -17,6 +17,7 @@ set(_unit_tests
     test_eco_stats
 )
 set(_gui_tests
+    test_headers
     serp_test
     freeze_test
     ui_test

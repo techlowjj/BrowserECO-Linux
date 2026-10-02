@@ -5,13 +5,48 @@
 [![Qt](https://img.shields.io/badge/Qt-6.4%2B-41cd52.svg)](https://doc.qt.io/qt-6/)
 
 Navigateur portable Linux orienté **économie de données** et **vie privée**.
-Version **1.3** — exception d'images par site, robustesse, blocage adverts
-conforme, build et tests propres.
+Version **1.4** — signal vie privée Sec-GPC, exception d'images par site,
+robustesse, blocage adverts conforme, build et tests propres.
 
 > L'historique complet du projet est dans les tags Git : `v1.2.0` (base de
 > référence « éco + robustesse ») et `v1.3.0` (exception d'images par site).
 
 ---
+
+## Ce que la 1.4 apporte
+
+### `Sec-GPC: 1` — le signal de vie privée
+
+`Save-Data` demande un mode économie à qui **accepte** de l'honorer.
+`Sec-GPC` (Global Privacy Control) est le signal normalisé qui exprime le
+**consentement** de la personne : il est envoyé sur **toutes** les requêtes, en
+plus de `Save-Data`, et coûte 1 octet.
+
+Les deux sont **indépendants** (deux interrupteurs distincts, ou un seul pour
+`Save-Data` qui suit l'économie de données). Mesure faite avant d'écrire quoi
+que ce soit, sur la machine de développement :
+
+| Échantillon | Sans `Sec-GPC` | Avec `Sec-GPC` | Écart |
+|---|---|---|---|
+| 5 images statiques (Google, Bing, YouTube, GitHub) | 134 274 o | 134 274 o | **0 %** |
+| Vignette Bing extraite d'une recherche d'images | 6 651 o | 6 651 o | **0 %** |
+
+**Conclusion honnête : aucun gain mesurable** sur les ressources joignables
+depuis cette machine. L'effet documenté de GPC concerne le service de Google
+et Bing qui *choisit* la résolution des images ; ces pages n'ont pas livré de
+vignettes exploitables depuis cette IP (réponse sans image pour Google). Donc :
+
+- on l'active parce que c'est le signal correct et gratuit, pas parce qu'il
+  ferait économiser des octets — **aucun chiffre d'économie n'est revendiqué** ;
+- pour mesurer sur votre propre connexion : onglet **Eco → Signal vie privée**,
+  puis DevTools → Network → comparer le poids des images avec l'interrupteur
+  activé puis désactivé ;
+- désactivable : `secGpc=0` dans `settings.txt`.
+
+Le test `test_headers` le prouve de bout en bout : un serveur HTTP local reçoit
+les requêtes du navigateur et **lit les en-têtes** — `Sec-GPC: 1` est présent
+sur la page et sur les images, absent une fois désactivé, et `Save-Data` reste
+indépendant.
 
 ## Ce que la 1.3 apporte
 
@@ -295,7 +330,7 @@ pour ceux qui démarrent QtWebEngine) et s'exécute dans son propre dossier vide
 recréé à chaque exécution — aucun test ne peut voir un `settings.txt`, une base
 ou un profil réel, ni les réglages laissés par un autre test.
 
-**12 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
+**13 suites, exécution headless** (`QT_QPA_PLATFORM=offscreen`) :
 
 | Suite | Couverture |
 |---|---|
@@ -307,6 +342,7 @@ ou un profil réel, ni les réglages laissés par un autre test.
 | `test_icons` | chaque icône dessine bien des pixels |
 | `test_eco_stats` | cohérence et bornage des compteurs d'économie |
 | `test_images` | exceptions d'images par site : frontières de label, sous-domaines, faux positifs (`notexample.com`), persistance, idempotence |
+| `test_headers` | **serveur HTTP local qui lit les en-têtes reçus** : `Sec-GPC` et `Save-Data` partent vraiment, se coupent vraiment, restent indépendants (page *et* images) |
 | `serp_test` | repli anti-challenge, détection de mur, exemption d'images sur les pages de vérification. **2 cas font de vraies requêtes réseau** : ignorés sauf si `BROWSERECO_NET_TESTS=1` (un runner CI, en adresse cloud, reçoit un mur anti-bot différent et rendrait le test instable) |
 | `freeze_test` | anti-gel : Menu → Téléchargements, thread témoin |
 | `ui_test` | **21 tests d'interface** (dont menu contextuel et entrée d'exception d'images) : barre d'adresse, suggestions, panneau Eco, historique, raccourcis, onglets, zoom, raccourcis annoncés = réels, menu contextuel, bouton Eco |
@@ -385,7 +421,7 @@ BrowserECO-Linux/
 │       ├── omnibox.{h,cpp}         ← barre d'adresse + suggestions
 │       ├── ecopanel.{h,cpp}        ← panneau Data saver
 │       └── icons.{h,cpp}           ← icônes vectorielles (QPainter)
-├── tests/                          ← 11 tests + CMakeLists.txt (CTest)
+├── tests/                          ← 13 tests + CMakeLists.txt (CTest)
 ├── Filters/                        ← EasyList + EasyPrivacy (~116 000 règles)
 │   ├── update.sh                   ← téléchargement des listes (non versionnées)
 │   ├── LICENSE                     ← attribution obligatoire
@@ -415,6 +451,7 @@ providerUrl=https://duckduckgo.com/ac/
 autoFallback=1       # bascule si mur anti-bot
 remoteSuggest=1      # suggestions réseau (~200 o)
 restoreSession=0
+secGpc=1             # signal Global Privacy Control (Sec-GPC: 1)
 imageAllow=          # sites dont les images sont autorisées (clic droit)
 session=             # écrit automatiquement à la sortie (URLs séparées par « | »)
 ```

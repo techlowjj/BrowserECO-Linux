@@ -63,6 +63,14 @@ int EcoInterceptor::imageAllowedCount() const
     return int(m_imageAllowed.size());
 }
 
+QList<QPair<QByteArray, QByteArray>> EcoInterceptor::privacyHeaders(bool dataSaver, bool secGpc)
+{
+    QList<QPair<QByteArray, QByteArray>> h;
+    if (dataSaver) h.append({ QByteArrayLiteral("Save-Data"), QByteArrayLiteral("on") });
+    if (secGpc)   h.append({ QByteArrayLiteral("Sec-GPC"), QByteArrayLiteral("1") });
+    return h;
+}
+
 EcoInterceptor::EcoInterceptor(AdBlocker *adblocker, QObject *parent)
     : QWebEngineUrlRequestInterceptor(parent), m_adblocker(adblocker)
 {}
@@ -155,17 +163,26 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
     QString urlStr = url.toString();
     auto type = info.resourceType();
 
+    // En-tetes de requete poses UNE seule fois, avant toute decision : ils
+    // s'appliquent aussi aux pages de verification anti-bot (a qui on laisse
+    // tous les autres bloqueurs). Un seul endroit a maintenir, et les deux
+    // signaux sont testes isolement (fonction pure privacyHeaders()).
+    const bool dataSaverOrUltra = m_dataSaver || m_ultraEco;
+    if (dataSaverOrUltra || m_secGpc) {
+        // Un en-tete HTTP n'a de sens que sur un vrai schema reseau : poser
+        // Save-Data sur file: ou data: provoque un avertissement inutile.
+        const QString scheme = url.scheme();
+        if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
+            const auto headers = privacyHeaders(dataSaverOrUltra, m_secGpc);
+            for (const auto &kv : headers) info.setHttpHeader(kv.first, kv.second);
+        }
+    }
+
     // Page de verification anti-bot : on ne bloque RIEN. Sans les images du
     // captcha, la page est insoluble et l'utilisateur est piege.
     if (isExemptFromBlocking(m_allowChallengeImages, info.firstPartyUrl().host())) {
-        if (m_dataSaver || m_ultraEco) info.setHttpHeader("Save-Data", "on");
         m_allowedCount.fetchAndAddRelaxed(1);
         return;
-    }
-
-    // Toujours ajouter Save-Data si DataSaver ou Ultra activé
-    if (m_dataSaver || m_ultraEco) {
-        info.setHttpHeader("Save-Data", "on");
     }
 
     // Ne jamais bloquer la navigation principale (sinon clic résultat semble "ne marche pas")

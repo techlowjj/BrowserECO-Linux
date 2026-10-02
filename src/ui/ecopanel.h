@@ -30,6 +30,7 @@ public:
     void setImagesChecked(bool on);
     void setUltraChecked(bool on);
     void setFaviconsChecked(bool on);
+    void setSecGpcChecked(bool on);
     void setQualityValue(int v);
 
     // Rafraichit compteurs / etats
@@ -40,6 +41,7 @@ signals:
     void imagesToggled(bool on);
     void ultraToggled(bool on);
     void faviconsToggled(bool on);
+    void secGpcToggled(bool on);
     void autoFallbackToggled(bool on);
     void remoteSuggestToggled(bool on);
     void qualityChanged(int value);
@@ -65,6 +67,7 @@ private:
     QToolButton *m_images = nullptr;
     QToolButton *m_ultra = nullptr;
     QToolButton *m_favicons = nullptr;
+    QToolButton *m_secGpc = nullptr;
     QToolButton *m_autoFallback = nullptr;
     QToolButton *m_remoteSuggest = nullptr;
     QToolButton *m_searchBtn = nullptr;

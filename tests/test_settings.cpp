@@ -38,6 +38,8 @@ void TestSettings::defautsSurFichierAbsent()
     QVERIFY(d.autoFallback);
     QVERIFY(d.session.isEmpty());
     QVERIFY(d.imageAllowedHosts.isEmpty());
+    // Sec-GPC est actif par defaut : c'est le signal de vie privee du navigateur.
+    QVERIFY(d.secGpc);
 }
 
 void TestSettings::lectureClefValeur()
@@ -56,6 +58,7 @@ void TestSettings::lectureClefValeur()
         "autoFallback=0\n"
         "remoteSuggest=0\n"
         "restoreSession=1\n"
+        "secGpc=0\n"
         "imageAllow=exemple.fr|photos.net\n"
         "session=https://a.fr|https://b.fr\n"));
     QCOMPARE(d.dataSaver, false);
@@ -70,6 +73,7 @@ void TestSettings::lectureClefValeur()
     QCOMPARE(d.autoFallback, false);
     QCOMPARE(d.remoteSuggestions, false);
     QCOMPARE(d.restoreSession, true);
+    QCOMPARE(d.secGpc, false);
     QCOMPARE(d.imageAllowedHosts.size(), 2);
     QCOMPARE(d.session.size(), 2);
 }
@@ -181,6 +185,7 @@ void TestSettings::allerRetour()
     d.autoFallback = false;
     d.remoteSuggestions = false;
     d.restoreSession = true;
+    d.secGpc = false;
     d.imageAllowedHosts = QStringList({QStringLiteral("z.fr"), QStringLiteral("a.fr")});
     d.session = QStringList({QStringLiteral("https://un.fr"), QStringLiteral("https://deux.fr")});
     QVERIFY(SettingsStore::save(path, d));
@@ -195,6 +200,7 @@ void TestSettings::allerRetour()
     QCOMPARE(back.autoFallback, d.autoFallback);
     QCOMPARE(back.remoteSuggestions, d.remoteSuggestions);
     QCOMPARE(back.restoreSession, d.restoreSession);
+    QCOMPARE(back.secGpc, d.secGpc);
     QCOMPARE(back.session, d.session);
     // Les hotes sont ecrits tries : le fichier reste stable d'une sauvegarde
     // a l'autre (pas de diff inutile a chaque sortie).

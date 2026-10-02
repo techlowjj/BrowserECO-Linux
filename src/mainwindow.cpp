@@ -1024,6 +1024,18 @@ void MainWindow::toggleUltraEco(bool checked) {
                      : tr("Mode Ultra désactivé"), 4000);
 }
 
+/* Sec-GPC : demande globale de limite de donnees envoyee a chaque site.
+   Coût : 1 octet par requête. Effet mesuré sur les ressources statiques : nul
+   (voir README) ; l'intérêt est d'exprimer le consentement de l'utilisateur,
+   ce que Save-Data ne fait que pour les sites qui l'acceptent. */
+void MainWindow::toggleSecGpc(bool checked) {
+    m_interceptor->setSecGpcEnabled(checked);
+    saveSettings();
+    setStatus(checked
+        ? tr("Signal vie privée envoyé : Sec-GPC: 1")
+        : tr("Signal vie privée désactivé"), 4000);
+}
+
 void MainWindow::onQualityChanged(int value) {
     applyQuality(value, true);
 }
@@ -1050,6 +1062,7 @@ void MainWindow::syncEcoWidgets()
         m_ecoPanel->setImagesChecked(m_imagesOff);
         m_ecoPanel->setUltraChecked(m_ultraEco);
         m_ecoPanel->setFaviconsChecked(m_favicons);
+        m_ecoPanel->setSecGpcChecked(m_secGpc);
         m_ecoPanel->setQualityValue(m_quality);
         m_ecoPanel->refresh();
     }
@@ -1084,6 +1097,7 @@ void MainWindow::showEcoPanelAt(const QPoint &globalPos)
             saveSettings();
             if (auto v = currentView()) v->reload();
         });
+        connect(m_ecoPanel, &EcoPanel::secGpcToggled, this, &MainWindow::toggleSecGpc);
         connect(m_ecoPanel, &EcoPanel::qualityChanged, this, [this](int v){ applyQuality(v, true); });
         connect(m_ecoPanel, &EcoPanel::engineChanged, this, &MainWindow::chooseSearchEngine);
         connect(m_ecoPanel, &EcoPanel::autoFallbackToggled, this, [this](bool on){
@@ -2015,9 +2029,11 @@ void MainWindow::loadSettings() {
     for (const QString &h : d.imageAllowedHosts)
         m_interceptor->setImageHostAllowed(h, true);
 
+    m_secGpc = d.secGpc;
     m_interceptor->setDataSaverEnabled(m_dataSaver);
     m_interceptor->setImagesOff(m_imagesOff);
     m_interceptor->setUltraEcoEnabled(m_ultraEco);
+    m_interceptor->setSecGpcEnabled(m_secGpc);
     m_zoom = d.zoom;
 
     m_quality = d.quality;
@@ -2044,6 +2060,7 @@ void MainWindow::saveSettings() {
     d.autoFallback = m_search->autoFallback();
     d.remoteSuggestions = m_search->remoteSuggestions();
     d.restoreSession = m_restoreSession;
+    d.secGpc = m_secGpc;
     d.imageAllowedHosts = m_interceptor->imageAllowedHosts();
 
     if (!m_isPrivate) {

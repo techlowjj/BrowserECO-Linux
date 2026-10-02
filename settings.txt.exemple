@@ -46,5 +46,9 @@ remoteSuggest=1
 # Restaurer les onglets de la session précédente au démarrage
 restoreSession=0
 
+# Signal « Global Privacy Control » (Sec-GPC: 1) envoyé à chaque site :
+# demande de limiter les données (images, vidéos). 1 octet par requête.
+secGpc=1
+
 # La session est écrite automatiquement à la sortie (clé « session »,
 # URLs séparées par « | ») : ne pas l'écrire à la main ici.

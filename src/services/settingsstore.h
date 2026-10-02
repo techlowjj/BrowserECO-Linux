@@ -32,6 +32,7 @@ struct SettingsData {
     bool autoFallback = true;
     bool remoteSuggestions = true;
     bool restoreSession = false;
+    bool secGpc = true;           // signal « Global Privacy Control »
     QStringList session;            // URLs, dans l'ordre des onglets
     QStringList imageAllowedHosts;  // sites dont les images sont autorisees
 };
