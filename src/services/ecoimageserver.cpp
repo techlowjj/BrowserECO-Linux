@@ -5,7 +5,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QThread>
 #include <QTimer>
+#include <QtConcurrent/QtConcurrentRun>
 
 namespace {
 
@@ -145,8 +147,37 @@ void EcoImageServer::onReadyRead()
     fetchAndServe(s, target, entetes);
 }
 
+bool EcoImageServer::acquireSlot()
+{
+    if (!m_inFlight.tryAcquire()) return false;
+    const int enV = ++m_enV;
+    int prevMax = m_maxEnV.load();
+    while (enV > prevMax && !m_maxEnV.compare_exchange_weak(prevMax, enV)) {}
+    return true;
+}
+
+void EcoImageServer::releaseSlot()
+{
+    --m_enV;
+    m_inFlight.release();
+    processQueue();
+}
+
 void EcoImageServer::fetchAndServe(QTcpSocket *socket, const EcoImageUrl::Target &target,
                                    const QMap<QByteArray, QByteArray> &entetes)
+{
+    // Plafond de concurrence : si la limite est atteinte, on met en file au lieu
+    // d'ouvrir une connexion de plus vers un CDN. tryAcquire (pas acquire) :
+    // bloquer le thread réseau figerait toutes les autres requêtes.
+    if (!acquireSlot()) {
+        m_queue.enqueue({socket, target, entetes});
+        return;
+    }
+    fetchAndCompress(socket, target, entetes);
+}
+
+void EcoImageServer::fetchAndCompress(QTcpSocket *socket, const EcoImageUrl::Target &target,
+                                      const QMap<QByteArray, QByteArray> &entetes)
 {
     if (!m_nam) m_nam = new QNetworkAccessManager(this);
 
@@ -177,12 +208,17 @@ void EcoImageServer::fetchAndServe(QTcpSocket *socket, const EcoImageUrl::Target
     connect(reply, &QNetworkReply::finished, this, [this, socketSurveillant, reply, target] {
         reply->deleteLater();
         QTcpSocket *s = socketSurveillant.data();
-        if (!s) return;
+        if (!s) {
+            // Socket mort entre-temps : on libère la place et on traite la file.
+            releaseSlot();
+            return;
+        }
 
         if (reply->error() != QNetworkReply::NoError) {
             ++m_failed;
             emit imageServed();
             respond(s, 502, "text/plain", QByteArrayLiteral("image non récupérée"));
+            releaseSlot();
             return;
         }
 
@@ -190,6 +226,35 @@ void EcoImageServer::fetchAndServe(QTcpSocket *socket, const EcoImageUrl::Target
         const QByteArray contentType = reply->header(QNetworkRequest::ContentTypeHeader).toByteArray();
         m_originalBytes += data.size();
 
+        // La compression va dans un worker : le thread principal ne fait que de
+        // l'I/O. Une image 4000 px ne doit pas geler l'IHM.
+        compressAndRespond(socketSurveillant, data, contentType, target);
+    });
+
+    QTimer::singleShot(kFetchTimeoutMs, reply, [reply] {
+        if (reply->isRunning()) reply->abort();
+    });
+}
+
+void EcoImageServer::processQueue()
+{
+    // Dépile tant qu'une place est libre. Un socket mort entre-temps est jeté
+    // (on ne répondra à personne, mais la page a déjà abandonné).
+    while (!m_queue.isEmpty() && acquireSlot()) {
+        const Pending p = m_queue.dequeue();
+        if (!p.socket) { releaseSlot(); continue; }
+        fetchAndCompress(p.socket.data(), p.target, p.entetes);
+    }
+}
+
+void EcoImageServer::compressAndRespond(const QPointer<QTcpSocket> &socket,
+                                        const QByteArray &data, const QByteArray &contentType,
+                                        const EcoImageUrl::Target &target)
+{
+    QPointer<EcoImageServer> self(this);
+    // (void) : on ignore le QFuture volontairement — on revient par invokeMethod,
+    // pas par le futur. Le projet compile en -Werror, donc il faut le dire.
+    (void)QtConcurrent::run([self, socket, data, contentType, target]() {
         ImageCodec::Request creq;
         creq.data = data;
         creq.contentType = QString::fromLatin1(contentType);
@@ -197,43 +262,56 @@ void EcoImageServer::fetchAndServe(QTcpSocket *socket, const EcoImageUrl::Target
         creq.quality = target.quality;
         const ImageCodec::Result res = ImageCodec::compress(creq);
 
-        QByteArray body = data;
-        QByteArray type = contentType;
-        bool compressee = false;
-        if (res.saves()) {
-            body = res.data;
-            type = res.contentType;
-            compressee = true;
-            const QString key = ImageCache::keyFor(target.original.toEncoded(), target.targetWidth,
-                                                   target.quality, res.contentType);
-            m_cache.put(key, res.data, res.contentType);
-            ++m_compressed;
-        } else {
-            // Rien à gagner : on sert les octets déjà téléchargés (une
-            // redirection ferait télécharger l'image une seule fois de plus).
-            ++m_passthrough;
-        }
-        m_servedBytes += body.size();
-        emit imageServed();
+        // Retour au thread principal pour répondre (respond() touche la I/O).
+        // data et contentType sont captures par valeur : le pass-through en a
+        // besoin si la compression n'a rien donne.
+        QMetaObject::invokeMethod(self.data(),
+            [self, socket, res, target, data, contentType]() {
+                if (!self) return;
+                QTcpSocket *s = socket.data();
+                if (!s) {
+                    self->m_inFlight.release();
+                    self->processQueue();
+                    return;
+                }
 
-        // Le type de sortie doit être exact : c'est lui qui décide si le
-        // navigateur décode l'image. S'il est absent ou non image, on le déduit
-        // des octets — sinon le navigateur afficherait du texte.
-        QByteArray finalType = type.split(';').first().trimmed().toLower();
-        if (finalType.isEmpty() || !finalType.startsWith("image/")) {
-            const QString devine = ImageCodec::guessContentType(body);
-            finalType = devine.isEmpty() ? QByteArrayLiteral("application/octet-stream")
-                                         : devine.toLatin1();
-        }
-        respond(s, 200, finalType, body,
-                compressee ? "Cache-Control: private, max-age=3600\r\nX-Eco-Compressed: 1\r\n"
-                           : "Cache-Control: private, max-age=300\r\n");
-    });
+                QByteArray body = data;
+                QByteArray type = contentType;
+                bool compressee = false;
+                if (res.saves()) {
+                    body = res.data;
+                    type = res.contentType;
+                    compressee = true;
+                    const QString key = ImageCache::keyFor(target.original.toEncoded(),
+                                                           target.targetWidth, target.quality,
+                                                           res.contentType);
+                    self->m_cache.put(key, res.data, res.contentType);
+                    ++self->m_compressed;
+                } else {
+                    // Rien à gagner : on sert les octets déjà téléchargés (une
+                    // redirection ferait télécharger l'image une seule fois de plus).
+                    ++self->m_passthrough;
+                }
+                self->m_servedBytes += body.size();
+                emit self->imageServed();
 
-    QTimer::singleShot(kFetchTimeoutMs, reply, [reply] {
-        if (reply->isRunning()) reply->abort();
+                // Le type de sortie doit être exact : c'est lui qui décide si le
+                // navigateur décode l'image. S'il est absent ou non image, on le
+                // déduit des octets — sinon le navigateur afficherait du texte.
+                QByteArray finalType = type.split(';').first().trimmed().toLower();
+                if (finalType.isEmpty() || !finalType.startsWith("image/")) {
+                    const QString devine = ImageCodec::guessContentType(body);
+                    finalType = devine.isEmpty() ? QByteArrayLiteral("application/octet-stream")
+                                                 : devine.toLatin1();
+                }
+                self->respond(s, 200, finalType, body,
+                        compressee ? "Cache-Control: private, max-age=3600\r\nX-Eco-Compressed: 1\r\n"
+                                   : "Cache-Control: private, max-age=300\r\n");
+                self->releaseSlot();
+            }, Qt::QueuedConnection);
     });
 }
+
 
 void EcoImageServer::resetStats()
 {
@@ -242,6 +320,8 @@ void EcoImageServer::resetStats()
     m_compressed = 0;
     m_passthrough = 0;
     m_failed = 0;
+    m_maxEnV = 0;
+    m_queue.clear();        // des requêtes en file après une remise à zéro seraient incohérentes
     emit imageServed();     // rafraîchit le panneau sur le champ
 }
 

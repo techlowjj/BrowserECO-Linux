@@ -84,3 +84,34 @@ jobs:
           dpkg-deb --fsys-tarfile browser-eco_*.deb | tar -xO ./usr/share/applications/BrowserECO.desktop \
             | grep -q '^Exec=/usr/bin/BrowserECO'
           echo "Paquet .deb OK : $(ls browser-eco_*.deb)"
+
+  clazy:
+    name: Clazy static analysis
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Clazy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clazy
+
+      - name: Configurer
+        run: |
+          cmake -S . -B build-clazy -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clazy
+
+      # Le build Clazy s'arrête au LIEN (Clazy pilote clang, pas le lien), mais
+      # tous les warnings sont émis pendant la compilation. On ignore donc
+      # l'échec de lien et on ne regarde que les warnings : on est à 0, tout
+      # nouveau warning est une régression.
+      - name: Analyser
+        run: |
+          cmake --build build-clazy --parallel 2>&1 | tee clazy.log || true
+          if grep -q "warning:" clazy.log; then
+            echo "::error::Clazy a détecté des warnings"
+            grep "warning:" clazy.log
+            exit 1
+          fi
+          echo "Clazy : 0 warning"

@@ -44,6 +44,7 @@ private slots:
     void rechargementRecompresse();
     void panneauAfficheLaMesureReelle();
     void remiseAZeroDesCompteurs();
+    void plafondDeConcurrence();
 
 private:
     QByteArray photo(int largeur, int hauteur);
@@ -74,6 +75,9 @@ private:
     QByteArray m_petite;         // la vignette servie par /petite.png
     QStringList m_requetes;      // chemins vus par le serveur
     int m_version = 0;           // les URL d'image changent à chaque chargement
+    // Suivi des connexions simultanées : c'est ainsi qu'on vérifie le plafond.
+    std::atomic<int> m_enCours{0};
+    int m_maxSimultane = 0;
 };
 
 // Bruit : une photo de bruit ne se compresse pas, donc le PNG est énorme et la
@@ -207,6 +211,11 @@ void TestImageServe::initTestCase()
 
     connect(m_server, &QTcpServer::newConnection, this, [this]{
         while (QTcpSocket *s = m_server->nextPendingConnection()) {
+            const int enCours = ++m_enCours;
+            m_maxSimultane = qMax(m_maxSimultane, enCours);
+            connect(s, &QTcpSocket::disconnected, this, [this]{
+                --m_enCours;
+            });
             connect(s, &QTcpSocket::readyRead, this, [this, s]{
                 const QByteArray brut = s->readAll();
                 if (brut.isEmpty()) return;
@@ -217,7 +226,17 @@ void TestImageServe::initTestCase()
                 QByteArray corps;
                 QByteArray type = "text/html; charset=utf-8";
                 int code = 200;
-                if (chemin.startsWith(QStringLiteral("/page"))) {
+                if (chemin.startsWith(QStringLiteral("/beaucoup"))) {
+                    // 30 images distinctes : au-dessus du plafond de 16, donc la
+                    // file d'attente doit s'activer. Chaque URL est distincte pour
+                    // éviter le cache (sinon une seule requête partirait).
+                    QString imgs;
+                    for (int i = 0; i < 30; ++i)
+                        imgs += QStringLiteral("<img src='http://127.0.0.1:%1/photo.png?v=%2'>")
+                                   .arg(m_port).arg(200 + i);
+                    corps = "<!DOCTYPE html><html><body>" + imgs.toUtf8() + "</body></html>";
+                    type = "text/html; charset=utf-8";
+                } else if (chemin.startsWith(QStringLiteral("/page"))) {
                     // Version lue dans l'URL de la page : sans cela Chromium
                     // reutilise l'image deja decodee pour la meme URL, meme avec le
                     // cache HTTP desactive, et « compression desactivee » ne
@@ -404,6 +423,37 @@ void TestImageServe::remiseAZeroDesCompteurs()
     QCOMPARE(m_win->imageServer()->servedBytes(), 0);
     QCOMPARE(m_win->imageServer()->compressedCount(), 0);
     QCOMPARE(m_win->imageServer()->cache().count(), cacheAvant);   // cache intact
+}
+
+void TestImageServe::plafondDeConcurrence()
+{
+    // 30 images distinctes > plafond de 16 : la file d'attente doit s'activer.
+    // On vérifie que le serveur d'images n'a JAMAIS ouvert plus de 16 connexions
+    // simultanées vers l'origin (le plafond), et qu'il y a bien eu de la
+    // concurrence (sinon le test ne prouverait rien).
+    activerCompression(true, 65);
+    m_requetes.clear();
+    m_win->imageServer()->cache().clear();
+
+    vue()->load(QUrl(QStringLiteral("http://127.0.0.1:%1/beaucoup").arg(m_port)));
+
+    // Attend que les 30 images soient téléchargées (le plafond ralentit la file).
+    QElapsedTimer t;
+    t.start();
+    while (m_win->imageServer()->originalBytes() == 0 && t.elapsed() < 25000)
+        QTest::qWait(50);
+    // Laisse le temps à la file de se vider.
+    for (int i = 0; i < 100 && m_win->imageServer()->maxSimultaneousFetches() > 0
+         && m_win->imageServer()->originalBytes() > 0; ++i) QTest::qWait(50);
+
+    // Le plafond n'a jamais été dépassé, et il y a bien eu de la concurrence.
+    const int max = m_win->imageServer()->maxSimultaneousFetches();
+    QVERIFY2(max > 1, "jamais de concurrence : le test ne prouve rien");
+    QVERIFY2(max <= 16,
+             qPrintable(QStringLiteral("plafond dépassé : %1 téléchargements simultanés")
+                            .arg(max)));
+    // Les 30 images ont bien été téléchargées (la file ne les a pas perdues).
+    QVERIFY2(m_win->imageServer()->originalBytes() > 0, "aucune image téléchargée");
 }
 
 QTEST_MAIN(TestImageServe)

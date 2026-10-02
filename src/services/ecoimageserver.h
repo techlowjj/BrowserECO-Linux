@@ -3,6 +3,9 @@
 #include <QMap>
 #include <QObject>
 #include <QPointer>
+#include <QQueue>
+#include <QSemaphore>
+#include <atomic>
 #include <QTcpServer>
 #include <QUrl>
 
@@ -59,9 +62,15 @@ public:
     int failedCount() const { return m_failed; }
     ImageCache &cache() { return m_cache; }
 
+    /* Nombre maximal de téléchargements simultanés observé. Compteur de
+     * monitoring (et de test) : il prouve que le plafond est respecté. */
+    int maxSimultaneousFetches() const { return m_maxEnV.load(); }
+
     /* Remet les compteurs à zéro, SANS vider le cache réseau : l'utilisateur
      * veut repartir de zéro dans l'affichage, pas retélécharger des images déjà
-     * en cache (cela gaspillerait de la bande passante). */
+     * en cache (cela gaspillerait de la bande passante). Vide aussi la file
+     * d'attente : des requêtes en file après une remise à zéro seraient
+     * incohérentes. */
     void resetStats();
 
 signals:
@@ -72,13 +81,38 @@ private:
     void onReadyRead();
     void fetchAndServe(QTcpSocket *socket, const EcoImageUrl::Target &target,
                        const QMap<QByteArray, QByteArray> &entetes);
+    void fetchAndCompress(QTcpSocket *socket, const EcoImageUrl::Target &target,
+                          const QMap<QByteArray, QByteArray> &entetes);
+    void processQueue();
+    /* Le compteur en vol et le sémaphore ne font qu'un : ces deux helpers
+     * garantissent qu'ils restent cohérents (sinon le plafond pourrait être
+     * dépassé sans qu'on le voie). */
+    bool acquireSlot();
+    void releaseSlot();
+    void compressAndRespond(const QPointer<QTcpSocket> &socket, const QByteArray &data,
+                           const QByteArray &contentType, const EcoImageUrl::Target &target);
     void respond(QTcpSocket *socket, int code, const QByteArray &contentType,
                  const QByteArray &body, const QByteArray &extraHeaders = QByteArray());
+
+    /* Plafond de concurrence : une page avec 200 photos ne doit pas ouvrir 200
+     * connexions simultanées vers les CDN. Chromium plafonne à 6 par hôte ;
+     * nous allons vers plusieurs hôte différents, donc un plafond global de
+     * 16 est raisonnable. */
+    static constexpr int kMaxConcurrentFetches = 16;
+    struct Pending {
+        QPointer<QTcpSocket> socket;
+        EcoImageUrl::Target target;
+        QMap<QByteArray, QByteArray> entetes;
+    };
 
     QTcpServer *m_server = nullptr;
     QNetworkAccessManager *m_nam = nullptr;
     ImageCache m_cache;
     QUrl m_base;
+    QSemaphore m_inFlight{kMaxConcurrentFetches};
+    QQueue<Pending> m_queue;
+    std::atomic<int> m_enV{0};          // téléchargements en cours
+    std::atomic<int> m_maxEnV{0};       // max observé (monitoring + tests)
     qint64 m_originalBytes = 0;
     qint64 m_servedBytes = 0;
     int m_compressed = 0;
