@@ -13,6 +13,7 @@
  */
 #include <QtTest>
 #include <QBuffer>
+#include <QFile>
 #include <QImage>
 #include <QRandomGenerator>
 #include <QTcpServer>
@@ -35,6 +36,7 @@ private slots:
     void clicChargeLImageReelle();
     void pageSansImagesNeBougePas();
     void compteurCorrect();
+    void ressourceScriptEstDisponible();
     void reglageDesactiveChargeNormalement();
 
 private:
@@ -100,6 +102,30 @@ QVariant TestLazyImages::attendre(const QString &js,
         else QTest::qWait(100);
     }
     return dernier;
+}
+
+/* GARDE-FOU contre l'echec SILENCIEUX.
+ *
+ * La ressource Qt est compilee dans une bibliotheque statique : si le linker
+ * jette l'objet qui la contient, le script est introuvable, aucune erreur n'est
+ * levee, et la fonctionnalite ne fait RIEN. Ce test echoue bruyamment dans ce
+ * cas, ce qu'un test fonctionnel seul ne garantit pas (il peut passer pour une
+ * autre raison).
+ *
+ * On ne cherche PAS le contenu avec `strings` : Qt stocke les noms de ressources
+ * en UTF-16, que `strings` en ASCII ne voit pas (faux negatif deja observe).
+ */
+void TestLazyImages::ressourceScriptEstDisponible()
+{
+    QFile f(QStringLiteral(":/lazyload.js"));
+    QVERIFY2(f.open(QIODevice::ReadOnly | QIODevice::Text),
+             "la ressource :/lazyload.js est absente : le chargement d'images "
+             "serait silencieusement inoperant");
+    const QByteArray contenu = f.readAll();
+    QVERIFY(contenu.size() > 500);
+    QVERIFY(contenu.contains("data-browsereco-src"));
+    QVERIFY(contenu.contains("MutationObserver"));
+    QVERIFY(contenu.contains("_eco"));   // le marqueur que l'intercepteur retire
 }
 
 void TestLazyImages::initTestCase()

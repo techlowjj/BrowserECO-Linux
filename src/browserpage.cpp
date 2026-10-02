@@ -39,22 +39,14 @@ bool BrowserPage::acceptNavigationRequest(const QUrl &url, NavigationType type, 
     return QWebEnginePage::acceptNavigationRequest(url, type, isMainFrame);
 }
 
-/*
- * La ressource Qt est compilee dans browsereco_core, une bibliotheque
- * STATIQUE. L'editeur de liens jette alors l'objet qui contient la ressource,
- * parce que rien ne la reference : :/lazyload.js serait introuvable au moment de
- * l'execution (verifie : le binaire ne contenait pas le script, et le
- * chargement d'images ne faisait rien). Il faut donc referencer le symbole
- * d'initialisation explicitement — piege classique des .qrc en bibliotheque.
- */
-static void initialiserRessources()
-{
-    Q_INIT_RESOURCE(resources);
-}
-
-static const int g_ressourcesInitialisees = (initialiserRessources(), 0);
-
-/* Le script est lu UNE fois depuis la ressource Qt puis reutilise : le relire a
+/* Piege des .qrc en bibliotheque STATIQUE : browsereco_core est une bibliotheque
+ * statique, et l'editeur de liens jette l'objet qui contient la ressource si
+ * rien ne la reference — :/lazyload.js devient introuvable et la fonctionnalite
+ * ne fait RIEN, silencieusement (verifie : le script etait absent du binaire).
+ * L'initialisation est donc faite dans installLazyImageScript(), appele AVANT
+ * toute lecture du fichier : elle ne depend donc plus du linkage, mais de
+ * l'appel lui-meme. Si on oublie l'appel, le fichier manque aussi — mais on le
+ * voit aussitot (avertissement), au lieu d'un echec muet. *//* Le script est lu UNE fois depuis la ressource Qt puis reutilise : le relire a
  * chaque page serait du gaspillage pour quelques kilo-octets. */
 static QString lazyLoadScript()
 {
@@ -69,6 +61,7 @@ static QString lazyLoadScript()
 void BrowserPage::installLazyImageScript(QWebEngineProfile *profile)
 {
     if (!profile) return;
+    Q_INIT_RESOURCE(resources);   // avant de lire :/lazyload.js
     const QString js = lazyLoadScript();
     if (js.isEmpty()) {
         qWarning("BrowserPage: script de chargement d'images introuvable (:lazyload.js)");

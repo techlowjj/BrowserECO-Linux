@@ -278,6 +278,12 @@ MainWindow::~MainWindow() {
     qDeleteAll(m_tabInfos);
     m_tabInfos.clear();
 
+    // Le serveur d'images local cesse d'ecouter AVANT que les pages soient
+    // detruites ci-dessus ? Non : ici, apres. Les pages encore vivantes peuvent
+    // encore lui demander une image, et un serveur ferme repondrait 502 pour des
+    // images sur le point d'etre servies. L'ordre compte : on ferme en DERNIER.
+    if (m_imageServer) m_imageServer->stop();
+
     // Pas de clearHttpCache() ici : c'est un E/S bloquante sur le thread GUI,
     // pendant des secondes sur un cache de 100 Mo. Le cache est vide au demarrage
     // du processus suivant de toute façon.
