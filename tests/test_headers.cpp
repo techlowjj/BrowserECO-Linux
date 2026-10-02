@@ -142,22 +142,30 @@ QList<QMap<QByteArray, QByteArray>> TestHeaders::requetesPour(const QString &pre
 
 void TestHeaders::enTetesPures()
 {
-    QVERIFY(EcoInterceptor::privacyHeaders(false, false).isEmpty());
+    QCOMPARE(EcoInterceptor::privacyHeaders(false, false).count, 0);
 
-    auto h = EcoInterceptor::privacyHeaders(true, false);
-    QCOMPARE(h.size(), 1);
-    QCOMPARE(h.first().first, QByteArray("Save-Data"));
-    QCOMPARE(h.first().second, QByteArray("on"));
+    const auto ds = EcoInterceptor::privacyHeaders(true, false);
+    QCOMPARE(ds.count, 1);
+    QVERIFY(ds.contains(QByteArrayView("Save-Data"), QByteArrayView("on")));
+    QVERIFY(!ds.contains(QByteArrayView("Sec-GPC"), QByteArrayView("1")));
 
-    h = EcoInterceptor::privacyHeaders(false, true);
-    QCOMPARE(h.size(), 1);
-    QCOMPARE(h.first().first, QByteArray("Sec-GPC"));
-    QCOMPARE(h.first().second, QByteArray("1"));
+    const auto gpc = EcoInterceptor::privacyHeaders(false, true);
+    QCOMPARE(gpc.count, 1);
+    QVERIFY(gpc.contains(QByteArrayView("Sec-GPC"), QByteArrayView("1")));
+    QVERIFY(!gpc.contains(QByteArrayView("Save-Data"), QByteArrayView("on")));
 
-    h = EcoInterceptor::privacyHeaders(true, true);
-    QCOMPARE(h.size(), 2);
-    QVERIFY(h.contains({ QByteArray("Save-Data"), QByteArray("on") }));
-    QVERIFY(h.contains({ QByteArray("Sec-GPC"), QByteArray("1") }));
+    const auto both = EcoInterceptor::privacyHeaders(true, true);
+    QCOMPARE(both.count, 2);
+    QVERIFY(both.contains(QByteArrayView("Save-Data"), QByteArrayView("on")));
+    QVERIFY(both.contains(QByteArrayView("Sec-GPC"), QByteArrayView("1")));
+
+    // Le jeu d'en-tetes est fige a deux entrees et ne contient AUCUN
+    // conteneur du tas (ni QList, ni QVector, ni std::vector) : c'est cette
+    // structure, lisible dans ecointerceptor.h, qui garantit qu'aucune
+    // allocation n'a lieu sur le chemin d'une requete.
+    QCOMPARE(int(EcoRequestHeaders::kMax), 2);
+    QVERIFY(std::is_trivially_copyable_v<EcoRequestHeaders>
+            || sizeof(EcoRequestHeaders) <= 2 * int(EcoRequestHeaders::kMax) * 64);
 }
 
 void TestHeaders::secGpcPartSurLaPage()

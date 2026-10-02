@@ -4,8 +4,9 @@
 #include "services/adblocker.h"
 #include <QAtomicInt>
 #include <QAtomicInteger>
+#include <QByteArray>
+#include <QByteArrayView>
 #include <QList>
-#include <QPair>
 #include <QSet>
 #include <QReadWriteLock>
 #include <QStringList>
@@ -19,6 +20,31 @@
  *
  * Ajout :compteurs par categorie pour afficher une economie de data chiffree.
  */
+
+/* Jeu d'en-tetes de requete, a TAILLE FIXE.
+ *
+ * Volontairement pas une QList : celle-ci allouait son tableau a chaque
+ * requete, sur le thread reseau, ou une page peut declencher 200 requetes.
+ * Ici tout tient dans la pile ; les QByteArray proviennent de QByteArrayLiteral
+ * (donnees statiques) donc leur copie ne fait qu'un increment de compteur.
+ * La taille 2 correspond aux deux seuls signaux emis (aucune allocation ni
+ * verification de type a chaque requete).
+ */
+struct EcoRequestHeaders {
+    static constexpr int kMax = 2;
+    int count = 0;
+    QByteArray name[kMax];
+    QByteArray value[kMax];
+
+    void add(QByteArray n, QByteArray v) {
+        if (count < kMax) { name[count] = std::move(n); value[count] = std::move(v); ++count; }
+    }
+    bool contains(QByteArrayView n, QByteArrayView v) const {
+        for (int i = 0; i < count; ++i)
+            if (name[i] == n && value[i] == v) return true;
+        return false;
+    }
+};
 
 /* Categories de blocage (ordre stable = index dans EcoInterceptor::m_byCat) */
 enum class EcoCategory {
@@ -52,7 +78,7 @@ public:
 
     // En-tetes de requete : fonction PURE (testable sans navigateur).
     // Save-Data : demande de mode economie. Sec-GPC : demande de protection.
-    static QList<QPair<QByteArray, QByteArray>> privacyHeaders(bool dataSaver, bool secGpc);
+    static EcoRequestHeaders privacyHeaders(bool dataSaver, bool secGpc);
     /* ---- Exceptions d'images par site -------------------------------------
      * « Images OFF » est le reglage le plus rentable (-90 % de moyenne mesuree),
      * mais il rend les sites photos/recettes illisibles. L'utilisateur peut

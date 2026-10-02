@@ -63,11 +63,11 @@ int EcoInterceptor::imageAllowedCount() const
     return int(m_imageAllowed.size());
 }
 
-QList<QPair<QByteArray, QByteArray>> EcoInterceptor::privacyHeaders(bool dataSaver, bool secGpc)
+EcoRequestHeaders EcoInterceptor::privacyHeaders(bool dataSaver, bool secGpc)
 {
-    QList<QPair<QByteArray, QByteArray>> h;
-    if (dataSaver) h.append({ QByteArrayLiteral("Save-Data"), QByteArrayLiteral("on") });
-    if (secGpc)   h.append({ QByteArrayLiteral("Sec-GPC"), QByteArrayLiteral("1") });
+    EcoRequestHeaders h;
+    if (dataSaver) h.add(QByteArrayLiteral("Save-Data"), QByteArrayLiteral("on"));
+    if (secGpc)   h.add(QByteArrayLiteral("Sec-GPC"),    QByteArrayLiteral("1"));
     return h;
 }
 
@@ -173,8 +173,9 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
         // Save-Data sur file: ou data: provoque un avertissement inutile.
         const QString scheme = url.scheme();
         if (scheme == QLatin1String("http") || scheme == QLatin1String("https")) {
-            const auto headers = privacyHeaders(dataSaverOrUltra, m_secGpc);
-            for (const auto &kv : headers) info.setHttpHeader(kv.first, kv.second);
+            const EcoRequestHeaders headers = privacyHeaders(dataSaverOrUltra, m_secGpc);
+            for (int i = 0; i < headers.count; ++i)
+                info.setHttpHeader(headers.name[i], headers.value[i]);
         }
     }
 
