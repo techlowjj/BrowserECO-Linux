@@ -52,12 +52,28 @@ jobs:
         run: Filters/update.sh
 
       - name: Tests (headless)
+        id: tests
+        continue-on-error: true
         env:
           QT_QPA_PLATFORM: offscreen
           # Chromium ne peut pas ouvrir son bac a sable ni utiliser /dev/shm
           # sur un runner CI : sans ces options, QtWebEngine ne demarre pas.
           QTWEBENGINE_CHROMIUM_FLAGS: --no-sandbox --disable-dev-shm-usage --disable-gpu
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure 2>&1 | tee ctest.log
+
+      # Les journaux de la CI necessitent une authentification pour etre lus par
+      # l'API ; les ANNOTATIONS, non. On publie donc le nom des tests fautifs et
+      # leurs messages d'echec : le diagnostic devient accessible, et le run
+      # echoue quand meme.
+      - name: Diagnostiquer les tests en echec
+        if: steps.tests.outcome == 'failure'
+        run: |
+          echo "::error::Echec de la suite de tests (voir ci-dessous)"
+          grep -E '^ *[0-9]+/[0-9]+ Test +#[0-9]+: .*\*\*\*' ctest.log | while IFS= read -r l; do
+            echo "::error::${l}"
+          done
+          grep -E '^(FAIL!|QFATAL|ASSERT|Segmentation|Received signal|Totals)' ctest.log             | head -20 | while IFS= read -r l; do echo "::error::${l}"; done
+          tail -30 ctest.log
 
       - name: Valider le fichier .desktop
         run: |
