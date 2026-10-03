@@ -146,6 +146,7 @@ void EcoPanel::buildUi()
     qlabel->setToolTip(tr("Seuil indicatif : en dessous de ~45 la qualité devient visible. 0 = pas de compression."));
     qrow->addWidget(qlabel);
     m_quality = new QSlider(Qt::Horizontal, this);
+    m_quality->setObjectName(QStringLiteral("qualitySlider"));
     m_quality->setRange(0, 85);
     m_quality->setValue(65);
     m_quality->setToolTip(tr("0 = images non compressées · 85 = qualité maximale"));

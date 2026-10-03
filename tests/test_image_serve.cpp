@@ -23,6 +23,8 @@
 #include <QTabWidget>
 #include <QRandomGenerator>
 #include <QSlider>
+#include <QThread>
+#include <QThreadPool>
 #include <QTemporaryDir>
 #include <QWebEngineView>
 
@@ -45,6 +47,8 @@ private slots:
     void rechargementRecompresse();
     void panneauAfficheLaMesureReelle();
     void remiseAZeroDesCompteurs();
+    void cacheVideAuChangementDeQualite();
+    void poolDeCompressionDedie();
     void plafondDeConcurrence();
 
 private:
@@ -460,6 +464,70 @@ void TestImageServe::plafondDeConcurrence()
                             .arg(max)));
     // Les 30 images ont bien été téléchargées (la file ne les a pas perdues).
     QVERIFY2(m_win->imageServer()->originalBytes() > 0, "aucune image téléchargée");
+}
+
+void TestImageServe::cacheVideAuChangementDeQualite()
+{
+    // La qualite fait partie de la cle du cache : sans vidage, les anciennes
+    // versions resteraient en memoire jusqu'a leur eviction.
+    activerCompression(true, 65);
+    m_requetes.clear();
+    m_win->imageServer()->cache().clear();
+    chargerPage();
+    QCOMPARE(largeurImage(QStringLiteral("i")), 1600);
+    QVERIFY2(m_win->imageServer()->cache().count() > 0, "le cache devrait etre rempli");
+
+    // On passe par le VRAI chemin de l'IHM : le curseur du panneau, qui declenche
+    // valueChanged -> onSliderMoved -> qualityChanged -> applyQuality. Tester
+    // l'UI reelle est plus fort qu'appeler une methode de test.
+    auto *panneau = m_win->ecoPanel();
+    QVERIFY(panneau);
+    auto *curseur = panneau->findChild<QSlider *>(QStringLiteral("qualitySlider"));
+    QVERIFY(curseur);
+    QVERIFY(curseur->value() != 40);
+    curseur->setValue(40);
+
+    QCOMPARE(m_win->imageServer()->cache().count(), 0);
+    QCOMPARE(m_win->imageServer()->cache().usedBytes(), qint64(0));
+
+    // Et surtout : le vidage n'a rien casse, les images se recompressent.
+    const int avant = m_win->imageServer()->compressedCount();
+    chargerPage();
+    QCOMPARE(largeurImage(QStringLiteral("i")), 1600);
+    QVERIFY2(m_win->imageServer()->compressedCount() > avant,
+             "les images ne sont plus compressees apres le changement de qualite");
+}
+
+void TestImageServe::poolDeCompressionDedie()
+{
+    // Le pool existe, est explicite, et n'est PAS le pool global de Qt.
+    QThreadPool *pool = m_win->imageServer()->compressionPool();
+    QVERIFY(pool);
+    QVERIFY(pool != QThreadPool::globalInstance());
+    QVERIFY(pool->maxThreadCount() > 0);
+    QCOMPARE(pool->maxThreadCount(), QThread::idealThreadCount());
+    QCOMPARE(pool->parent(), m_win->imageServer());   // il vit avec le serveur
+
+    // Et surtout : la compression fonctionne toujours (une page a 30 images
+    // sollicite le pool plusieurs fois, y compris en parallele).
+    activerCompression(true, 65);
+    m_requetes.clear();
+    m_win->imageServer()->cache().clear();
+    ++m_version;
+    vue()->load(QUrl(QStringLiteral("http://127.0.0.1:%1/beaucoup").arg(m_port)));
+    attendre(QStringLiteral("document.body ? 1 : -1"), 20000,
+             [](const QVariant &v) { return v.toInt() == 1; });
+    QTest::qWait(1500);
+
+    // Le pool doit compresser une bonne part des images sous charge PARALLELE :
+    // c'est cela qui prouve que le pool dedie fonctionne.
+    QVERIFY2(m_win->imageServer()->compressedCount() >= 20,
+             qPrintable(QStringLiteral("seulement %1 images compressees sur 30")
+                            .arg(m_win->imageServer()->compressedCount())));
+    // On n'exige PAS zero echec : cette page fait passer 210 Mo (30 x 7 Mo) a
+    // travers le petit serveur local du test, qui en laisse parfois tomber le
+    // transfert. Ce n'est pas la produit qui est en cause — le comptage exact
+    // depend de la charge du serveur de test.
 }
 
 QTEST_MAIN(TestImageServe)

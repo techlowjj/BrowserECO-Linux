@@ -6,6 +6,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QThread>
+#include <QThreadPool>
 #include <QTimer>
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -51,6 +52,12 @@ EcoImageServer::EcoImageServer(QObject *parent)
     : QObject(parent), m_server(new QTcpServer(this))
 {
     connect(m_server, &QTcpServer::newConnection, this, &EcoImageServer::onNewConnection);
+
+    // Pool DEDIE, cree des la construction : compressAndServe() en depend, et il
+    // doit donc exister avant toute requete. Enfant du serveur, il vit exactement
+    // aussi longtemps que lui.
+    m_pool = new QThreadPool(this);
+    m_pool->setMaxThreadCount(QThread::idealThreadCount());
 }
 
 EcoImageServer::~EcoImageServer() = default;
@@ -254,7 +261,7 @@ void EcoImageServer::compressAndRespond(const QPointer<QTcpSocket> &socket,
     QPointer<EcoImageServer> self(this);
     // (void) : on ignore le QFuture volontairement — on revient par invokeMethod,
     // pas par le futur. Le projet compile en -Werror, donc il faut le dire.
-    (void)QtConcurrent::run([self, socket, data, contentType, target]() {
+    (void)QtConcurrent::run(m_pool, [self, socket, data, contentType, target]() {
         ImageCodec::Request creq;
         creq.data = data;
         creq.contentType = QString::fromLatin1(contentType);

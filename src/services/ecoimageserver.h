@@ -13,6 +13,7 @@
 #include "imagecache.h"
 
 class QNetworkAccessManager;
+class QThreadPool;
 
 /*
  * EcoImageServer — serveur HTTP local qui sert les images compressées.
@@ -62,6 +63,13 @@ public:
     int failedCount() const { return m_failed; }
     ImageCache &cache() { return m_cache; }
 
+    /* Pool de compression DEDIE (pas le pool global de Qt) : le nombre de
+     * compressions simultanees devient explicite et isole du reste de Qt.
+     * Chaque compression concurrente retient une image decodee entiere (~33 Mo
+     * en 4K) : baisser maxThreadCount reduit le pic memoire, au detriment du
+     * debit sur les pages riches en images. */
+    QThreadPool *compressionPool() const { return m_pool; }
+
     /* Nombre maximal de téléchargements simultanés observé. Compteur de
      * monitoring (et de test) : il prouve que le plafond est respecté. */
     int maxSimultaneousFetches() const { return m_maxEnV.load(); }
@@ -110,6 +118,7 @@ private:
 
     QTcpServer *m_server = nullptr;
     QNetworkAccessManager *m_nam = nullptr;
+    QThreadPool *m_pool = nullptr;
     ImageCache m_cache;
     QUrl m_base;
     QSemaphore m_inFlight{kMaxConcurrentFetches};

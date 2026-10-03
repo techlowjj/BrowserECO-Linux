@@ -1084,7 +1084,14 @@ void MainWindow::onQualityChanged(int value) {
 void MainWindow::applyQuality(int value, bool fromUser)
 {
     value = ImageCodec::clampQuality(value);
+    // La qualite fait partie de la cle du cache : sans vidage, changer de curseur
+    // laisserait les anciennes versions en memoire jusqu'a leur eviction, et la
+    // memoire monterait par paliers. On ne vide QUE si la valeur change vraiment
+    // (au demarrage, valeur identique : aucun vidage inutile).
+    const bool qualiteChangee = (value != m_quality);
     if (fromUser) m_quality = value;
+    if (qualiteChangee && m_imageServer && m_imageServer->isRunning())
+        m_imageServer->cache().clear();
     // Le curseur est enfin branché : qualité 0 = pas de compression, sinon les
     // images passent par notre serveur local et reviennent compressées.
     // La borne est celle du codec (source unique), pas un qBound dupliqué.
