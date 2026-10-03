@@ -65,6 +65,14 @@ int EcoInterceptor::imageAllowedCount() const
     return int(m_imageAllowed.size());
 }
 
+bool EcoInterceptor::isDownloadUrl(const QString &path)
+{
+    static const QRegularExpression downloadExt(
+        QStringLiteral(R"(\.(zip|rar|7z|exe|msi|pdf|mp4|mkv|mp3|avi|iso|tar|gz|bz2|dmg|apk|appimage|deb|rpm)$)"),
+        QRegularExpression::CaseInsensitiveOption);
+    return downloadExt.match(path).hasMatch();
+}
+
 bool EcoInterceptor::isActivated(const QString &url) const
 {
     return m_activatedImages.contains(url);
@@ -74,8 +82,13 @@ void EcoInterceptor::markActivated(const QString &url)
 {
     // On memorise l'URL PROPRE (celle du script, sans marqueur) : c'est elle que
     // le navigateur redemandera au rechargement, et elle doit donc etre reconnue.
-    if (m_activatedImages.size() >= kMaxActivatedImages) m_activatedImages.removeFirst();
-    if (!m_activatedImages.contains(url)) m_activatedImages.append(url);
+    if (m_activatedImages.size() >= kMaxActivatedImages) {
+        // Set : on evince une entree quelconque (l'ordre n'a pas de sens ici,
+        // contrairement a une liste ou « removeFirst » voulait dire « la plus
+        // ancienne »).
+        m_activatedImages.erase(m_activatedImages.constBegin());
+    }
+    m_activatedImages.insert(url);
 }
 
 bool EcoInterceptor::wouldRewriteImage(
@@ -231,12 +244,13 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
     //    les 114 000 règles avec « .../ads.js?a=.pdf ».
     //  - la regex est statique : la reconstruire coutait 156 µs par requête
     //    (1 µs une fois compilee), sur le thread IO de QtWebEngine.
-    QString lowerUrl = urlStr.toLower();
-    static const QRegularExpression downloadExt(
-        QStringLiteral(R"(\.(zip|rar|7z|exe|msi|pdf|mp4|mkv|mp3|avi|iso|tar|gz|bz2|dmg|apk|appimage|deb|rpm)$)"),
-        QRegularExpression::CaseInsensitiveOption);
-    const QString lowerPath = url.path().toLower();
-    bool isDownloadFile = downloadExt.match(lowerPath).hasMatch();
+    // Pas de copie en minuscule du chemin ici : la regex est deja
+    // CaseInsensitiveOption (voir isDownloadUrl), et c'est le seul endroit du
+    // chemin chaud qui l'utilise. Avant, on materialisait une minuscule du
+    // chemin pour TOUTES les requetes alors que les deux autres usages sont rares
+    // (categorisation d'un blocage, mode Ultra) — soit deux QString construites
+    // et jetees par requete.
+    const bool isDownloadFile = isDownloadUrl(url.path());
     if (isDownloadFile) {
         qDebug() << "EcoInterceptor: allow download file" << urlStr.left(120);
         m_allowedCount.fetchAndAddRelaxed(1);
@@ -250,6 +264,7 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
             info.block(true);
             // Pubs ou trackers selon le nom d'hote (estimation d'affichage)
             EcoCategory cat = EcoCategory::Pubs;
+            const QString lowerUrl = urlStr.toLower();   // seulement si on bloque
             if (lowerUrl.contains("analytics") || lowerUrl.contains("track")
                 || lowerUrl.contains("pixel") || lowerUrl.contains("beacon")
                 || lowerUrl.contains("metrics") || lowerUrl.contains("telemetry"))
@@ -281,6 +296,7 @@ void EcoInterceptor::interceptRequest(QWebEngineUrlRequestInfo &info) {
     if (m_ultraEco && !isMainFrame && !isDownloadFile) {
         // Chemin + query : les marqueurs de flux (mime=video, range=) sont
         // des parametres, l'extension est dans le chemin.
+        const QString lowerPath = url.path().toLower();   // mode Ultra seulement
         const QString ls = lowerPath + QLatin1Char('?') + url.query().toLower();
         bool isStreamUrl = ls.contains(".m3u8") || ls.contains(".mpd")
             || ls.contains("videoplayback") || ls.contains("googlevideo.com")

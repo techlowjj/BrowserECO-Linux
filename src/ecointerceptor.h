@@ -97,6 +97,14 @@ public:
      * chargement de page, l'image n'arrivant jamais. */
     bool wouldRewriteImage(const QUrl &url,
                            QWebEngineUrlRequestInfo::ResourceType type) const;
+    /* Detection d'un fichier a telecharger, par chemin. Extrait de
+     * interceptRequest() pour etre TESTABLE : la detection sert a autoriser le
+     * telechargement, et une erreur ne se voit pas (un .zip bloque telecharge au
+     * lieu d'etre propose a l'utilisateur).
+     * Insensible a la casse : c'est la regex qui l'est, pas une minuscule du
+     * chemin — materialiser cette minuscule coutait une QString par requete. */
+    static bool isDownloadUrl(const QString &path);
+
     bool isActivated(const QString &url) const;
     void markActivated(const QString &url);
     void setUltraEcoEnabled(bool e) { m_ultraEco = e; }
@@ -191,7 +199,10 @@ private:
     // grossir sans fin ; sans cela, recharger la page rebloquerait des images que
     // l'utilisateur avait deja demandees.
     static constexpr int kMaxActivatedImages = 2048;
-    QStringList m_activatedImages;   // formes encodees des URL voulues
+    // QSet et non QStringList : la recherche est faite a CHAQUE requete d'image
+    // en mode « a la demande », et contains() sur une liste parcourait jusqu'a
+    // 2048 chaines en comparant des URLs completes (defaut : O(n) par image).
+    QSet<QString> m_activatedImages;   // formes encodees des URL voulues
     int m_deferredCount = 0;
     QUrl m_imageServer;                // racine du serveur d'images local
     int m_imageQuality = ImageCodec::kDefaultQuality;

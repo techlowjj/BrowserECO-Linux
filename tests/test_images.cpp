@@ -27,6 +27,7 @@ private slots:
     void imageDeException_nonBloquee();   // decision d'interception
     void pasDeBoucleDeReecriture();       // notre URL ne doit jamais se reecrire
     void queLesImagesSontReecrites();     // et rien d'autre
+    void detectionDeTelechargement();      // extension + casse + faux positif
 };
 
 void TestImages::correspondanceSurFrontieresDeLabel()
@@ -184,6 +185,32 @@ void TestImages::queLesImagesSontReecrites()
     QVERIFY(!eco.wouldRewriteImage(QUrl(QStringLiteral("data:image/png;base64,AAA")), image));
     // Une vraie image bien sur.
     QVERIFY(eco.wouldRewriteImage(QUrl(QStringLiteral("https://a.fr/photo.png")), image));
+}
+
+/* La detection de telechargement decide si un fichier est PROPOSE a
+ * l'utilisateur (et non bloque). Une erreur ne se voit pas : le fichier se
+ * telecharge sans passer par la boite de dialogue, ou pire, un .zip est bloque.
+ *
+ * Le cas sensible est la casse : le chemin n'est plus mis en minuscule avant
+ * d'etre teste, la regex porte donc l'insensibilite (CaseInsensitiveOption). Si
+ * quelqu'un retire cette option un jour, ce test echoue — c'est son role. */
+void TestImages::detectionDeTelechargement()
+{
+    for (const QString &p : {QStringLiteral("/a/fichier.pdf"), QStringLiteral("/x/y.zip"),
+                             QStringLiteral("/prog.exe"), QStringLiteral("/v.mkv"),
+                             QStringLiteral("/app.AppImage"), QStringLiteral("/paquet.deb")})
+        QVERIFY2(EcoInterceptor::isDownloadUrl(p), qPrintable(QStringLiteral("non detecte : ") + p));
+
+    // La casse ne doit PAS changer le resultat.
+    for (const QString &p : {QStringLiteral("/a/FICHIER.PDF"), QStringLiteral("/X/Y.ZIP"),
+                             QStringLiteral("/PROG.EXE")})
+        QVERIFY2(EcoInterceptor::isDownloadUrl(p), qPrintable(QStringLiteral("casse non geree : ") + p));
+
+    // Faux positifs a eviter.
+    for (const QString &p : {QStringLiteral("/page.html"), QStringLiteral("/img/photo.jpeg"),
+                             QStringLiteral("/"), QStringLiteral("/a.pdf.bak"),
+                             QStringLiteral("/pdf"), QStringLiteral("/a.pd")})
+        QVERIFY2(!EcoInterceptor::isDownloadUrl(p), qPrintable(QStringLiteral("faux positif : ") + p));
 }
 
 QTEST_MAIN(TestImages)
