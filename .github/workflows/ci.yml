@@ -102,10 +102,14 @@ jobs:
       - name: Récupérer le code
         uses: actions/checkout@v4
 
-      - name: Installer Clazy
+      - name: Installer Clazy et Qt
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clazy
+          # Les dependances Qt sont INDISPENSABLES ici aussi : sans elles,
+          # find_package(Qt6) echoue a la configuration. C'est ce qui faisait
+          # echouer ce job (vu sur 9089654).
+          sudo apt-get install -y --no-install-recommends \
+            clazy cmake g++ qt6-base-dev qt6-webengine-dev
 
       - name: Configurer
         run: |
