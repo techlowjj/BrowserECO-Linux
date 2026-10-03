@@ -579,9 +579,9 @@ page ──▶ intercepteur ──redirection──▶ 127.0.0.1:port/i?u=<origi
 - **Cookies non rejoués** : `QWebEngineCookieStore` n'expose aucune lecture dans ce
   Qt. Une image derrière une authentification échoue en `403` → l'échec ouvert la
   fait retenter par le navigateur, donc elle s'affiche, simplement non compressée.
-- **Chrome 142+** : les requêtes vers la boucle locale demanderont une permission
-  (« loopback-network »). Sans effet sur le Qt 6.8 embarqué ; à surveiller si le
-  projet passe à un Chromium plus récent.
+- **Chrome 142+ : la boucle locale demandera une permission** — voir la section
+  dédiée ci-dessous. Sans effet sur le Qt 6.8 embarqué, mais c'est la contrainte
+  qui pèserait le plus lourd si le projet montait en version de Qt.
 - **Pas de WebP ici** : cette installation n'a pas d'encodeur WebP, le codec
   bascule en JPEG. Avec `qt6-image-formats-plugins`, le gain gagne ~20 % de plus.
 - Les images en CSS (`background-image`) ou construites en JavaScript ne passent
@@ -598,3 +598,72 @@ page ──▶ intercepteur ──redirection──▶ 127.0.0.1:port/i?u=<origi
 Le test `test_image_serve` rejoue tout cela dans un vrai navigateur contre un
 vrai serveur : image reçue en 1600 px au lieu de 1800, **une seule** requête
 réseau pour l'image, et octets servis < octets téléchargés.
+
+---
+
+## Chrome 142+ : le point de vigilance de cette architecture
+
+C'est la seule partie du projet qui repose sur la documentation et non sur une
+mesure. Elle mérite donc une explication complète.
+
+### Ce qui se passe
+
+Notre serveur d'images écoute sur `127.0.0.1`, avec un port éphémère. Google
+durecit progressivement l'accès des pages web au réseau local, parce que
+« page web → adresse locale » est une vraie surface d'attaque (CSRF vers une box,
+un routeur, un appareil connecté).
+
+À partir de **Chrome 142**, une requête vers la boucle locale demande une
+permission explicite à l'utilisateur :
+
+| Navigateur | Ce que voit l'utilisateur |
+|---|---|
+| Chromium de Qt 6.8 (le nôtre) | rien : le trafic passe |
+| Chrome 142 et plus | une demande de permission « loopback-network » |
+
+Si l'utilisateur refuse, plus aucune compression d'image. Le navigateur continue
+de fonctionner normalement : les images se chargent, sans compression.
+
+### Pourquoi ce n'est pas bloquant aujourd'hui
+
+Trois faits, dont deux mesurés :
+
+1. **Le schéma privé `ecoimg://` ne fonctionne pas** (mesuré) : Qt 6.8 annule
+   silencieusement la redirection d'un intercepteur vers un schéma personnalisé
+   pour une sous-ressource. L'original est annulé, rien n'est demandé, et le
+   gestionnaire n'est jamais sollicité. Le serveur local n'est donc pas un choix
+   de confort, c'est la seule voie qui marche sous ce Qt.
+2. **`http://127.0.0.1` est explicitement exempté du blocage « mixed content »**,
+   y compris depuis une page HTTPS en contexte sécurisé (documenté par Chrome).
+3. **Le précurseur de cette règle, la PNA, est en mode simple avertissement**
+   dans le Chromium embarqué : le trafic passe, seul un avertissement est
+   journalisé dans la console du site.
+
+### Ce qu'il faudrait faire le jour où Qt monte
+
+Le jour où le projet passe à un Qt embarquant Chromium ≥ 142, deux pistes :
+
+- **Demander la permission** — techniquement simple, mais l'utilisateur voit une
+  demande à chaque visite, ce qui nuit à la crédibilité d'un navigateur « éco ».
+- **Revenir au schéma privé** — c'était le plan initial, et il serait de nouveau
+  possible *si* le blocage Qt 6.8 était contourné. Attention : ce blocage n'est
+  pas documenté par Qt, il a été déduit experimentally. Il faudrait donc vérifier
+  si un Qt plus récent le corrige, et ne pas supposer que le schéma privé
+  fonctionnerait du premier coup.
+
+### Comment surveiller
+
+Au moment de toute montée de version de Qt :
+
+```bash
+# Chromium embarqué dans le Qt installé
+strings /usr/lib/*/libQt6WebEngineCore.so.* | grep -m1 -oE 'Chrome/[0-9]+'
+```
+
+Si le numéro ≥ 142, il faut traiter ce point **avant** de publier la version.
+
+### Ce qui n'est PAS concerné
+
+Le chargement d'images à la demande ne dépend pas du réseau local : il bloque les
+images au niveau de l'intercepteur et libère au clic. Il n'a aucun rapport avec
+cette contrainte.
