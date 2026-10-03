@@ -80,10 +80,20 @@ jobs:
                 -DBROWSERECO_BUILD_TESTS=OFF -DBROWSERECO_DEB_LAYOUT=ON
           cmake --build build-deb --parallel
           cpack --config build-deb/CPackConfig.cmake -G DEB
-          dpkg-deb -c browser-eco_*.deb | grep -q "usr/bin/BrowserECO"
-          dpkg-deb --fsys-tarfile browser-eco_*.deb | tar -xO ./usr/share/applications/BrowserECO.desktop \
+          # UN SEUL paquet attendu. Avec un glob, un ancien .deb laisse dans le
+          # depot fait matcher deux fichiers et dpkg-deb echoue de facon
+          # incomprehensible (« tar killed by signal ») — c'est exactement ce qui
+          # faisait echouer cette etape sur d5be541 (bump 1.3.0 -> 1.4.0 avec
+          # le vieux paquet encore versionne). On compte, et on dit quoi.
+          mapfile -t paquets < <(ls -1 browser-eco_*.deb 2>/dev/null || true)
+          if [ "${#paquets[@]}" -ne 1 ]; then
+            echo "::error::Attendu exactement 1 paquet .deb, trouve ${#paquets[@]} : ${paquets[*]:-(aucun)}"
+            exit 1
+          fi
+          dpkg-deb -c "${paquets[0]}" | grep -q "usr/bin/BrowserECO"
+          dpkg-deb --fsys-tarfile "${paquets[0]}" | tar -xO ./usr/share/applications/BrowserECO.desktop \
             | grep -q '^Exec=/usr/bin/BrowserECO'
-          echo "Paquet .deb OK : $(ls browser-eco_*.deb)"
+          echo "Paquet .deb OK : ${paquets[0]}"
 
   clazy:
     name: Clazy static analysis

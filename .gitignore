@@ -57,3 +57,10 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# Paquets et artefacts de build : JAMAIS dans le depot.
+# Un .deb versionne casse l'etape « Paquet DEB » de la CI : au changement de
+# version, le glob 'browser-eco_*.deb' matche l'ancien ET le nouveau paquet,
+# et dpkg-deb ne recevant qu'un seul fichier echoue (vu en CI sur d5be541).
+*.deb
+_CPack_Packages/
